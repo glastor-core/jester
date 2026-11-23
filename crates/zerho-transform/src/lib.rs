@@ -1,3 +1,5 @@
+pub mod svg;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use lightningcss::css_modules::Config as CssModulesConfig;
@@ -15,6 +17,8 @@ use oxc::span::{SourceType, Span};
 use oxc::transformer::{JsxOptions, JsxRuntime, TransformOptions, Transformer};
 use zerho_core::{ContentHash, Framework, ModuleKind, ZerhoError, ZerhoResult};
 use zerho_plugin::{PluginContext, PluginRegistry};
+
+pub use svg::optimize_svg;
 
 /// Input to the native transform pipeline.
 #[derive(Debug, Clone)]

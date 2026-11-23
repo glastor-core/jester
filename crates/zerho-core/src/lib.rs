@@ -135,6 +135,8 @@ pub enum ZerhoError {
     Io { path: Option<PathBuf>, reason: String },
     Plugin { plugin: String, reason: String },
     Server(String),
+    Security(String),
+    Budget(String),
 }
 
 impl fmt::Display for ZerhoError {
@@ -158,6 +160,8 @@ impl fmt::Display for ZerhoError {
             Self::Io { path: None, reason } => write!(f, "I/O error: {reason}"),
             Self::Plugin { plugin, reason } => write!(f, "plugin `{plugin}` error: {reason}"),
             Self::Server(msg) => write!(f, "dev server error: {msg}"),
+            Self::Security(msg) => write!(f, "security error: {msg}"),
+            Self::Budget(msg) => write!(f, "bundle budget exceeded: {msg}"),
         }
     }
 }

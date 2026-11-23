@@ -105,9 +105,21 @@ fn cmd_build(flags: &[String]) -> ZerhoResult<()> {
         output.out_dir.display()
     );
     for chunk in output.chunks {
+        let raw_kb = format!("{}.{:02} KB", chunk.bytes / 1024, (chunk.bytes % 1024) * 100 / 1024);
+        let gz_kb = format!(
+            "{}.{:02} KB",
+            chunk.gzip_bytes / 1024,
+            (chunk.gzip_bytes % 1024) * 100 / 1024
+        );
+        let sri_tag = chunk
+            .integrity
+            .as_ref()
+            .map_or_else(String::new, |s| format!("  [{}..]", &s[..15.min(s.len())]));
         match chunk.sourcemap_file {
-            Some(map) => println!("  {} ({} bytes) + {map}", chunk.file_name, chunk.bytes),
-            None => println!("  {} ({} bytes)", chunk.file_name, chunk.bytes),
+            Some(map) => {
+                println!("  {}  {raw_kb} | gzip: {gz_kb}  (+ {map}){sri_tag}", chunk.file_name);
+            }
+            None => println!("  {}  {raw_kb} | gzip: {gz_kb}{sri_tag}", chunk.file_name),
         }
     }
     Ok(())

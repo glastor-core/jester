@@ -12,6 +12,50 @@ pub struct ZerhoConfig {
     pub build: BuildConfig,
     pub css: CssConfig,
     pub cache: CacheConfig,
+    pub security: SecurityConfig,
+    pub assets: AssetsConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SecurityConfig {
+    /// Emit `integrity="sha384-..."` (Subresource Integrity) on `<script>` and `<link>` tags.
+    pub sri: bool,
+    /// Emit strict `dist/csp.json` Content-Security-Policy manifest.
+    pub csp: bool,
+    /// Scan emitted JS bundles for accidentally leaked API keys/tokens and fail build if found.
+    pub secret_scan: bool,
+}
+
+impl Default for SecurityConfig {
+    fn default() -> Self {
+        Self {
+            sri: true,
+            csp: true,
+            secret_scan: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssetsConfig {
+    /// Automatically optimize imported and `public/` `.svg` files in pure Rust.
+    pub optimize_svg: bool,
+}
+
+impl Default for AssetsConfig {
+    fn default() -> Self {
+        Self { optimize_svg: true }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct BudgetsConfig {
+    /// Maximum allowed total gzipped JS size in KiB.
+    pub max_js_kb: Option<u64>,
+    /// Maximum allowed total gzipped CSS size in KiB.
+    pub max_css_kb: Option<u64>,
+    /// Maximum allowed gzipped size for any single JS/CSS chunk in KiB.
+    pub max_chunk_kb: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,6 +87,8 @@ pub struct ServerConfig {
     pub port: u16,
     pub hmr: bool,
     pub open: bool,
+    /// Enable zero-waterfall in-memory partial bundling endpoint (`/@zerho/bundle`).
+    pub partial_bundling: bool,
     /// Path-prefix HTTP reverse proxy map, e.g. `"/api" -> "http://127.0.0.1:8080"`.
     pub proxy: BTreeMap<String, String>,
 }
@@ -54,6 +100,7 @@ impl Default for ServerConfig {
             port: 5173,
             hmr: true,
             open: false,
+            partial_bundling: true,
             proxy: BTreeMap::new(),
         }
     }
@@ -98,6 +145,7 @@ pub struct BuildConfig {
     pub sourcemap: SourceMapMode,
     pub target: String,
     pub splitting: bool,
+    pub budgets: BudgetsConfig,
 }
 
 impl Default for BuildConfig {
@@ -108,6 +156,7 @@ impl Default for BuildConfig {
             sourcemap: SourceMapMode::Linked,
             target: "es2022".to_owned(),
             splitting: true,
+            budgets: BudgetsConfig::default(),
         }
     }
 }
@@ -200,6 +249,9 @@ impl ZerhoConfig {
                 ("server", "port") => config.server.port = parse_u16(value, line_no)?,
                 ("server", "hmr") => config.server.hmr = parse_bool(value, line_no)?,
                 ("server", "open") => config.server.open = parse_bool(value, line_no)?,
+                ("server", "partial_bundling") => {
+                    config.server.partial_bundling = parse_bool(value, line_no)?;
+                }
                 ("build", "out_dir") => {
                     config.build.out_dir = PathBuf::from(parse_string(value, line_no)?);
                 }
@@ -209,11 +261,28 @@ impl ZerhoConfig {
                 }
                 ("build", "target") => config.build.target = parse_string(value, line_no)?,
                 ("build", "splitting") => config.build.splitting = parse_bool(value, line_no)?,
+                ("build.budgets", "max_js_kb") => {
+                    config.build.budgets.max_js_kb = Some(parse_u64(value, line_no)?);
+                }
+                ("build.budgets", "max_css_kb") => {
+                    config.build.budgets.max_css_kb = Some(parse_u64(value, line_no)?);
+                }
+                ("build.budgets", "max_chunk_kb") => {
+                    config.build.budgets.max_chunk_kb = Some(parse_u64(value, line_no)?);
+                }
                 ("css", "modules") => config.css.modules = parse_bool(value, line_no)?,
                 ("css", "minify") => config.css.minify = parse_bool(value, line_no)?,
                 ("cache", "enabled") => config.cache.enabled = parse_bool(value, line_no)?,
                 ("cache", "dir") => {
                     config.cache.dir = PathBuf::from(parse_string(value, line_no)?);
+                }
+                ("security", "sri") => config.security.sri = parse_bool(value, line_no)?,
+                ("security", "csp") => config.security.csp = parse_bool(value, line_no)?,
+                ("security", "secret_scan") => {
+                    config.security.secret_scan = parse_bool(value, line_no)?;
+                }
+                ("assets", "optimize_svg") => {
+                    config.assets.optimize_svg = parse_bool(value, line_no)?;
                 }
                 _ => {
                     return Err(ZerhoError::Config(format!(
@@ -474,6 +543,14 @@ fn parse_u16(raw: &str, line_no: usize) -> ZerhoResult<u16> {
     raw.parse::<u16>().map_err(|_| {
         ZerhoError::Config(format!(
             "line {line_no}: expected integer between 0 and 65535, got `{raw}`"
+        ))
+    })
+}
+
+fn parse_u64(raw: &str, line_no: usize) -> ZerhoResult<u64> {
+    raw.parse::<u64>().map_err(|_| {
+        ZerhoError::Config(format!(
+            "line {line_no}: expected positive integer, got `{raw}`"
         ))
     })
 }

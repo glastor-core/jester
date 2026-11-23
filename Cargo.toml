@@ -39,6 +39,8 @@ axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "fs", "signal", "io-util"] }
 notify = "8"
 wasmtime = { version = "29", default-features = false, features = ["cranelift", "runtime"] }
+sha2 = "0.10"
+flate2 = "1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

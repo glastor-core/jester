@@ -1,7 +1,13 @@
+pub mod security;
+
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
+use security::{
+    build_csp_manifest, compute_gzip_size, compute_sri_sha384, enforce_budgets,
+    scan_for_leaked_secrets,
+};
 use zerho_config::{SourceMapMode, ZerhoConfig, build_import_meta_env_json, load_env_vars};
 use zerho_core::{ContentHash, ModuleId, ModuleKind, ZerhoError, ZerhoResult};
 use zerho_graph::ModuleGraph;
@@ -10,17 +16,19 @@ use zerho_resolver::{OxcResolver, Resolver};
 use zerho_transform::{
     ImportedSymbols, TransformInput, TransformPipeline, collect_dynamic_imports,
     collect_imported_symbols, encode_base64, finalize_js_bundle_with_map, is_likely_commonjs,
-    lower_esm_for_bundle, prune_unused_exports, rewrite_dynamic_imports,
+    lower_esm_for_bundle, optimize_svg, prune_unused_exports, rewrite_dynamic_imports,
     serialize_css_exports_json, wrap_cjs_as_esm,
 };
 
-/// Emitted production chunk metadata.
+/// Emitted production chunk metadata (including gzip size and optional SHA-384 SRI digest).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Chunk {
     pub file_name: String,
     pub hash: ContentHash,
     pub bytes: usize,
+    pub gzip_bytes: usize,
     pub sourcemap_file: Option<String>,
+    pub integrity: Option<String>,
 }
 
 /// Result of a production build.
@@ -143,23 +151,37 @@ impl Bundler {
             }
         }
 
-        // 2. Assemble, minify, and emit the entry JS bundle (+ source map).
+        // 2. Assemble, minify, and emit the entry JS bundle (+ source map + SRI + secret scan).
         let entry_id = self.module_key(&entry_canon);
         let raw_js = assemble_js_bundle(&collected, &entry_id);
         let entry_chunk = self.emit_js_chunk(&out_dir, "index", &raw_js)?;
         let js_file = entry_chunk.file_name.clone();
+        let js_sri = entry_chunk.integrity.clone();
         chunks.insert(0, entry_chunk);
 
-        // 3. Emit CSS, copy public/ static assets, production index.html, and manifest.json.
-        let css_file = emit_css_bundle(&out_dir, &collected, &mut chunks)?;
+        // 3. Emit CSS, copy/optimize public/ static assets, enforce budgets, emit index.html, manifest.json, and csp.json.
+        let css_emit = emit_css_bundle(&out_dir, &collected, self.config.security.sri, &mut chunks)?;
         let public_dir = self.root.join(&self.config.project.public_dir);
         if public_dir.is_dir() {
-            copy_dir_recursive(&public_dir, &out_dir)?;
+            copy_dir_recursive(&public_dir, &out_dir, self.config.assets.optimize_svg)?;
         }
+
+        enforce_budgets(&chunks, &self.config.build.budgets)?;
+
+        if self.config.security.csp {
+            let csp_path = out_dir.join("csp.json");
+            fs::write(&csp_path, build_csp_manifest(&chunks)).map_err(|err| ZerhoError::Io {
+                path: Some(csp_path),
+                reason: err.to_string(),
+            })?;
+        }
+
         self.emit_html_and_manifest(
             &out_dir,
             &js_file,
-            css_file.as_deref(),
+            js_sri.as_deref(),
+            css_emit.as_ref().map(|(f, _)| f.as_str()),
+            css_emit.as_ref().and_then(|(_, sri)| sri.as_deref()),
             &split_chunk_files,
             collected.len(),
             tree_shaken_exports,
@@ -250,11 +272,14 @@ impl Bundler {
         Ok((split_chunk_files, dynamic_url_map, total_shaken))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn emit_html_and_manifest(
         &self,
         out_dir: &Path,
         js_file: &str,
+        js_sri: Option<&str>,
         css_file: Option<&str>,
+        css_sri: Option<&str>,
         split_chunk_files: &[String],
         module_count: usize,
         tree_shaken_exports: usize,
@@ -265,8 +290,14 @@ impl Bundler {
                 path: Some(src_html),
                 reason: err.to_string(),
             })?;
-            let prod_html =
-                rewrite_html_for_production(&html, &self.config.project.entry, js_file, css_file);
+            let prod_html = rewrite_html_for_production(
+                &html,
+                &self.config.project.entry,
+                js_file,
+                js_sri,
+                css_file,
+                css_sri,
+            );
             let out_html = out_dir.join("index.html");
             fs::write(&out_html, prod_html).map_err(|err| ZerhoError::Io {
                 path: Some(out_html),
@@ -283,8 +314,9 @@ impl Bundler {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
+        let integrity_json = js_sri.map_or_else(|| "null".to_owned(), |s| format!("\"{s}\""));
         let manifest = format!(
-            "{{\n  \"entry\": \"{}\",\n  \"file\": \"{js_file}\",\n  \"css\": {css_json},\n  \"chunks\": {split_json},\n  \"sourcemap\": \"{}\",\n  \"modules\": {module_count},\n  \"tree_shaken_exports\": {tree_shaken_exports}\n}}\n",
+            "{{\n  \"entry\": \"{}\",\n  \"file\": \"{js_file}\",\n  \"integrity\": {integrity_json},\n  \"css\": {css_json},\n  \"chunks\": {split_json},\n  \"sourcemap\": \"{}\",\n  \"modules\": {module_count},\n  \"tree_shaken_exports\": {tree_shaken_exports}\n}}\n",
             self.config.project.entry.to_string_lossy().replace('\\', "/"),
             self.config.build.sourcemap.as_str(),
         );
@@ -340,6 +372,17 @@ impl Bundler {
             }
         }
 
+        if self.config.security.secret_scan {
+            scan_for_leaked_secrets(&file_name, &final_js)?;
+        }
+
+        let integrity = self
+            .config
+            .security
+            .sri
+            .then(|| compute_sri_sha384(final_js.as_bytes()));
+        let gzip_bytes = compute_gzip_size(final_js.as_bytes());
+
         let js_path = out_dir.join(&file_name);
         fs::write(&js_path, &final_js).map_err(|err| ZerhoError::Io {
             path: Some(js_path),
@@ -350,7 +393,9 @@ impl Bundler {
             file_name,
             hash: js_hash,
             bytes: final_js.len(),
+            gzip_bytes,
             sourcemap_file,
+            integrity,
         })
     }
 
@@ -471,30 +516,39 @@ impl Bundler {
         out_dir: &Path,
         asset_chunks: &mut Vec<Chunk>,
     ) -> ZerhoResult<CollectedModule> {
-        let bytes = fs::read(canonical).map_err(|err| ZerhoError::Io {
+        let mut bytes = fs::read(canonical).map_err(|err| ZerhoError::Io {
             path: Some(canonical.to_path_buf()),
             reason: err.to_string(),
         })?;
+        let ext = canonical
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("bin");
+        if self.config.assets.optimize_svg
+            && ext.eq_ignore_ascii_case("svg")
+            && let Ok(text) = std::str::from_utf8(&bytes)
+        {
+            bytes = optimize_svg(text).into_bytes();
+        }
         let hash = ContentHash::from_bytes(&bytes);
         let stem = canonical
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("asset");
-        let ext = canonical
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("bin");
         let file_name = format!("assets/{stem}-{}.{ext}", hash.short_hex());
         let dest = out_dir.join(&file_name);
         fs::write(&dest, &bytes).map_err(|err| ZerhoError::Io {
             path: Some(dest),
             reason: err.to_string(),
         })?;
+        let gzip_bytes = compute_gzip_size(&bytes);
         asset_chunks.push(Chunk {
             file_name: file_name.clone(),
             hash,
             bytes: bytes.len(),
+            gzip_bytes,
             sourcemap_file: None,
+            integrity: None,
         });
         Ok(CollectedModule {
             id: self.module_key(canonical),
@@ -516,7 +570,7 @@ impl Bundler {
     }
 }
 
-fn copy_dir_recursive(src: &Path, dst: &Path) -> ZerhoResult<()> {
+fn copy_dir_recursive(src: &Path, dst: &Path, optimize_svgs: bool) -> ZerhoResult<()> {
     fs::create_dir_all(dst).map_err(|err| ZerhoError::Io {
         path: Some(dst.to_path_buf()),
         reason: err.to_string(),
@@ -533,7 +587,15 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> ZerhoResult<()> {
         let from = entry.path();
         let to = dst.join(entry.file_name());
         if from.is_dir() {
-            copy_dir_recursive(&from, &to)?;
+            copy_dir_recursive(&from, &to, optimize_svgs)?;
+        } else if optimize_svgs
+            && from.extension().is_some_and(|e| e.eq_ignore_ascii_case("svg"))
+            && let Ok(raw) = fs::read_to_string(&from)
+        {
+            fs::write(&to, optimize_svg(&raw)).map_err(|err| ZerhoError::Io {
+                path: Some(to),
+                reason: err.to_string(),
+            })?;
         } else {
             fs::copy(&from, &to).map_err(|err| ZerhoError::Io {
                 path: Some(to),
@@ -547,8 +609,9 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> ZerhoResult<()> {
 fn emit_css_bundle(
     out_dir: &Path,
     collected: &[CollectedModule],
+    emit_sri: bool,
     chunks: &mut Vec<Chunk>,
-) -> ZerhoResult<Option<String>> {
+) -> ZerhoResult<Option<(String, Option<String>)>> {
     let mut css_parts = Vec::new();
     for module in collected {
         if module.kind == ModuleKind::Css && !module.code.trim().is_empty() {
@@ -566,13 +629,17 @@ fn emit_css_bundle(
         path: Some(css_path),
         reason: err.to_string(),
     })?;
+    let integrity = emit_sri.then(|| compute_sri_sha384(combined_css.as_bytes()));
+    let gzip_bytes = compute_gzip_size(combined_css.as_bytes());
     chunks.push(Chunk {
         file_name: file_name.clone(),
         hash: css_hash,
         bytes: combined_css.len(),
+        gzip_bytes,
         sourcemap_file: None,
+        integrity: integrity.clone(),
     });
-    Ok(Some(file_name))
+    Ok(Some((file_name, integrity)))
 }
 
 fn is_css_module_path(path: &Path) -> bool {
@@ -662,16 +729,24 @@ fn rewrite_html_for_production(
     html: &str,
     entry: &Path,
     js_file: &str,
+    js_sri: Option<&str>,
     css_file: Option<&str>,
+    css_sri: Option<&str>,
 ) -> String {
     let entry_web = format!("/{}", entry.to_string_lossy().replace('\\', "/"));
-    let mut out = html.replace(
-        &format!("src=\"{entry_web}\""),
-        &format!("src=\"/{js_file}\""),
-    );
+    let script_attr = match js_sri {
+        Some(sri) => format!("src=\"/{js_file}\" integrity=\"{sri}\" crossorigin=\"anonymous\""),
+        None => format!("src=\"/{js_file}\""),
+    };
+    let mut out = html.replace(&format!("src=\"{entry_web}\""), &script_attr);
 
     if let Some(css) = css_file {
-        let link = format!("  <link rel=\"stylesheet\" href=\"/{css}\" />\n");
+        let link = match css_sri {
+            Some(sri) => format!(
+                "  <link rel=\"stylesheet\" href=\"/{css}\" integrity=\"{sri}\" crossorigin=\"anonymous\" />\n"
+            ),
+            None => format!("  <link rel=\"stylesheet\" href=\"/{css}\" />\n"),
+        };
         if let Some(pos) = out.find("</head>") {
             out.insert_str(pos, &link);
         } else {
@@ -686,16 +761,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rewrites_html_entry_and_injects_css_link() {
+    fn rewrites_html_entry_and_injects_css_link_with_sri() {
         let html = "<!doctype html><html><head><title>App</title></head><body><script type=\"module\" src=\"/src/main.ts\"></script></body></html>";
         let prod = rewrite_html_for_production(
             html,
             Path::new("src/main.ts"),
             "assets/index-abcd1234.js",
+            Some("sha384-jsHash"),
             Some("assets/index-9999aaaa.css"),
+            Some("sha384-cssHash"),
         );
-        assert!(prod.contains("src=\"/assets/index-abcd1234.js\""));
-        assert!(prod.contains("href=\"/assets/index-9999aaaa.css\""));
+        assert!(prod.contains("src=\"/assets/index-abcd1234.js\" integrity=\"sha384-jsHash\" crossorigin=\"anonymous\""));
+        assert!(prod.contains("href=\"/assets/index-9999aaaa.css\" integrity=\"sha384-cssHash\" crossorigin=\"anonymous\""));
         assert!(!prod.contains("/src/main.ts"));
     }
 

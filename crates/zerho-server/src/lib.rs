@@ -16,8 +16,8 @@ use zerho_core::{ModuleId, ModuleKind, ZerhoError, ZerhoResult};
 use zerho_graph::{CachedArtifact, DiskCache, ModuleGraph};
 use zerho_resolver::{OxcResolver, Resolver};
 use zerho_transform::{
-    TransformInput, TransformPipeline, is_likely_commonjs, rewrite_imports, wrap_cjs_as_esm,
-    wrap_css_as_hmr_module, wrap_css_with_exports_as_hmr_module,
+    TransformInput, TransformPipeline, is_likely_commonjs, lower_esm_for_bundle, rewrite_imports,
+    wrap_cjs_as_esm, wrap_css_as_hmr_module, wrap_css_with_exports_as_hmr_module,
 };
 
 const INSPECT_HTML: &str = include_str!("inspect.html");
@@ -108,6 +108,7 @@ impl DevServer {
             .route("/@zerho/client", get(serve_hmr_client))
             .route("/@zerho/hmr", get(hmr_ws_handler))
             .route("/@zerho/deps/{*pkg}", get(serve_dep))
+            .route("/@zerho/bundle", get(serve_partial_bundle))
             .route("/__inspect", get(serve_inspect_ui))
             .route("/__inspect/api", get(serve_inspect_api))
             .route("/{*path}", any(serve_module))
@@ -444,13 +445,14 @@ async fn serve_inspect_api(State(state): State<Arc<ServerState>>) -> Response {
     );
     let cache = state.cache.stats();
     let body = format!(
-        "{{\"project\":\"{}\",\"framework\":\"{}\",\"modules\":{},\"edges\":{},\"cache_hits\":{},\"cache_misses\":{},\"items\":{items_json}}}",
+        "{{\"project\":\"{}\",\"framework\":\"{}\",\"modules\":{},\"edges\":{},\"cache_hits\":{},\"cache_misses\":{},\"partial_bundling\":{},\"items\":{items_json}}}",
         state.config.project.name,
         state.config.project.framework,
         metrics.module_count,
         metrics.edge_count,
         cache.hits,
-        cache.misses
+        cache.misses,
+        state.config.server.partial_bundling
     );
     (
         StatusCode::OK,
@@ -461,6 +463,127 @@ async fn serve_inspect_api(State(state): State<Arc<ServerState>>) -> Response {
         body,
     )
         .into_response()
+}
+
+/// Zero-waterfall in-memory partial bundler for dev mode (`GET /@zerho/bundle`).
+/// Combines the local static script subgraph into a single HTTP response while keeping
+/// `DiskCache` and CSS HMR imports active.
+async fn serve_partial_bundle(State(state): State<Arc<ServerState>>) -> Response {
+    if !state.config.server.partial_bundling {
+        return (StatusCode::NOT_FOUND, "partial bundling disabled in zerho.toml").into_response();
+    }
+
+    let entry_path = state.root.join(&state.config.project.entry);
+    let Ok(entry_canon) = entry_path.canonicalize() else {
+        return (StatusCode::NOT_FOUND, "entry file not found").into_response();
+    };
+
+    let mut visited = std::collections::HashSet::new();
+    let mut entries: Vec<(String, String)> = Vec::new();
+    let mut css_imports: Vec<String> = Vec::new();
+
+    if let Err(err) = collect_partial_dev_modules(
+        &state,
+        &entry_canon,
+        &mut visited,
+        &mut entries,
+        &mut css_imports,
+    ) {
+        return js_response(
+            render_error_overlay_module("/@zerho/bundle", &err.to_string()),
+            "no-cache",
+        );
+    }
+
+    let entry_key = path_to_web_url(&state.root, &entry_canon)
+        .unwrap_or_else(|| "/src/main.ts".to_owned());
+
+    let mut out = String::new();
+    for css in css_imports {
+        out.push_str("import \"");
+        out.push_str(&css);
+        out.push_str("\";\n");
+    }
+    out.push_str("import.meta.env = ");
+    out.push_str(&state.env_json);
+    out.push_str(";\nconst __zerho_registry = {\n");
+    for (id, body) in entries {
+        out.push_str("  \"");
+        out.push_str(&id);
+        out.push_str("\": function(__zerho_require, __zerho_exports) {\n");
+        out.push_str(&body);
+        out.push_str("\n  },\n");
+    }
+    out.push_str(
+        "};\n\
+         const __zerho_cache = {};\n\
+         function __zerho_require(id) {\n\
+           if (__zerho_cache[id]) return __zerho_cache[id].exports;\n\
+           const f = __zerho_registry[id];\n\
+           if (!f) throw new Error(\"[zerho partial] missing: \" + id);\n\
+           const m = { exports: {} };\n\
+           __zerho_cache[id] = m;\n\
+           f(__zerho_require, m.exports);\n\
+           return m.exports;\n\
+         }\n\
+         __zerho_require(\"",
+    );
+    out.push_str(&entry_key);
+    out.push_str("\");\n");
+
+    js_response(out, "no-cache")
+}
+
+fn collect_partial_dev_modules(
+    state: &ServerState,
+    path: &Path,
+    visited: &mut std::collections::HashSet<PathBuf>,
+    entries: &mut Vec<(String, String)>,
+    css_imports: &mut Vec<String>,
+) -> ZerhoResult<()> {
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    if !visited.insert(canonical.clone()) {
+        return Ok(());
+    }
+
+    let kind = ModuleKind::from_path(&canonical);
+    if kind == ModuleKind::Css {
+        if let Some(url) = path_to_web_url(&state.root, &canonical) {
+            css_imports.push(url);
+        }
+        return Ok(());
+    }
+    if !kind.is_script() {
+        return Ok(());
+    }
+
+    let source = std::fs::read_to_string(&canonical).map_err(|err| ZerhoError::Io {
+        path: Some(canonical.clone()),
+        reason: err.to_string(),
+    })?;
+    let artifact = transform_with_cache(state, &canonical, kind, source)?;
+
+    for spec in &artifact.imports {
+        if let Ok(resolved) = state.resolver.resolve(spec, Some(&canonical))
+            && !resolved.is_virtual
+        {
+            collect_partial_dev_modules(state, &resolved.path, visited, entries, css_imports)?;
+        }
+    }
+
+    let lowered = lower_esm_for_bundle(&artifact.code, &canonical, |spec| {
+        let resolved = state.resolver.resolve(spec, Some(&canonical)).ok()?;
+        if resolved.kind == ModuleKind::Css || resolved.is_virtual {
+            return None;
+        }
+        let target = resolved.path.canonicalize().unwrap_or(resolved.path);
+        path_to_web_url(&state.root, &target)
+    })?;
+
+    if let Some(id) = path_to_web_url(&state.root, &canonical) {
+        entries.push((id, lowered));
+    }
+    Ok(())
 }
 
 /// Resolves and serves bare `node_modules` packages as browser ESM without Node.js.
