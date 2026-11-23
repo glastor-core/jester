@@ -1,6 +1,8 @@
 /target
 /.zerho
 /.vektor
+/website/node_modules
+/website/.astro
 **/dist
 **/.zerho
 Cargo.lock

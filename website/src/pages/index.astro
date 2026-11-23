@@ -1,0 +1,350 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const initCommand = 'zerho init my-app --template react-tsx && cd my-app && zerho dev';
+
+const features = [
+  {
+    icon: 'bolt',
+    title: 'Oxc Native Compiler & Tree-Shaker',
+    desc: 'Sub-millisecond TS, JSX, React, Preact, and Solid transforms with AST import rewriting, two-pass symbol-level tree-shaking, and Source Maps v3.',
+  },
+  {
+    icon: 'layers',
+    title: 'LightningCSS & CSS Modules',
+    desc: 'Built-in CSS nesting, vendor prefixing, production minification, and native *.module.css scoped class maps with zero PostCSS config.',
+  },
+  {
+    icon: 'hub',
+    title: 'Oxc Resolver & CJS-to-ESM Pre-Bundler',
+    desc: 'Native Node ESM/CJS resolution with automatic CommonJS-to-ESM pre-bundling served from /@zerho/deps — without invoking Node.js.',
+  },
+  {
+    icon: 'speed',
+    title: 'Granular HMR & Shadow DOM Overlay',
+    desc: 'State-preserving import.meta.hot (accept, dispose, persistent data) paired with an isolated Shadow DOM <zerho-error-overlay> for instant diagnostics.',
+  },
+  {
+    icon: 'database',
+    title: 'Persistent blake3 Disk Cache & /__inspect',
+    desc: 'Content-addressed .zerho/cache hits in 0.232 ms and an embedded /__inspect DevTools UI for live module graph and cache telemetry.',
+  },
+  {
+    icon: 'extension',
+    title: 'Sandboxed Wasmtime Plugin Host',
+    desc: 'Fuel-metered WebAssembly plugins via wasmtime v29 implementing the zerho:plugin@0.1.0 WIT Component Model contract.',
+  },
+  {
+    icon: 'shield',
+    title: '.env, HTTP Proxy & Static Assets',
+    desc: 'Prefix-filtered import.meta.env (ZERHO_*), declarative [server.proxy] reverse proxy, public/ passthrough, and blake3-hashed asset imports.',
+  },
+  {
+    icon: 'memory',
+    title: 'Single 12.65 MB Safe Rust Binary',
+    desc: 'Compiled with Rust Edition 2024, unsafe_code = "forbid", clippy::pedantic -D warnings, and zero runtime dependencies.',
+  },
+  {
+    icon: 'terminal',
+    title: 'Instant Scaffolding & Built-in Bench',
+    desc: 'Bootstrap basic-ts or react-tsx apps in milliseconds with zerho init, and verify real local timings with zerho bench.',
+  },
+];
+
+const crates = [
+  { name: 'zerho-core', desc: 'Core identifiers (ModuleId, blake3 ContentHash), ModuleKind, Framework, and typed error hierarchy.' },
+  { name: 'zerho-config', desc: 'Declarative zerho.toml parser, validator, serializer, and JSON Schema generator.' },
+  { name: 'zerho-resolver', desc: 'Native ESM/CJS module resolution powered by oxc_resolver, package.json exports, and virtual modules.' },
+  { name: 'zerho-graph', desc: 'Incremental module dependency graph with reverse-edge HMR invalidation and persistent DiskCache.' },
+  { name: 'zerho-plugin', desc: 'Native Plugin trait (DefinePlugin), fuel-metered wasmtime v29 host, and zerho:plugin@0.1.0 WIT contract.' },
+  { name: 'zerho-transform', desc: 'Oxc TS/JSX compiler, AST import rewriter, two-pass symbol tree-shaker, and lightningcss pipeline.' },
+  { name: 'zerho-server', desc: 'Zero-Node axum + tokio + notify dev server, WebSocket HMR, /@zerho/deps, /__inspect UI, and PreviewServer.' },
+  { name: 'zerho-bundler', desc: 'Production bundler with dynamic import() code splitting, minification, Source Maps v3, and manifest.json.' },
+  { name: 'zerho-cli', desc: 'Single native CLI binary: dev, build, preview, bench, init, schema, and wit.' },
+];
+---
+
+<BaseLayout
+  title="zerho — Zero-Node, 100% Rust Frontend Dev Server & Bundler"
+  description="Single 12.65 MB native Rust binary replacing Node.js in your frontend toolchain. Sub-millisecond Oxc transforms, LightningCSS, granular HMR, and 9.56 ms production builds."
+>
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
+        <span>v0.1.0 · Single 12.65 MB Binary · Zero Node.js Runtime</span>
+      </div>
+
+      <h1>
+        Frontend tooling at <span class="accent-text">native Rust</span> speed.
+      </h1>
+
+      <p class="hero-lead">
+        <strong>zerho</strong> is a Zero-Node, 100% Rust dev server and production bundler built on
+        <span class="inline-code">oxc</span>, <span class="inline-code">lightningcss</span>,
+        <span class="inline-code">blake3</span>, and <span class="inline-code">wasmtime</span>.
+        Ship React, Preact, Solid, and TypeScript apps with sub-millisecond transforms and zero JS runtime overhead.
+      </p>
+
+      <div class="hero-actions">
+        <a href="/docs#quick-start" class="btn btn-primary">
+          <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span>
+          <span>Start in 5 Seconds</span>
+        </a>
+        <a href="/docs" class="btn btn-secondary">
+          <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+          <span>Read the Docs</span>
+        </a>
+      </div>
+
+      <div class="cli-box" role="region" aria-label="Quick start command">
+        <div class="cli-code">
+          <span class="cli-prompt" aria-hidden="true">$</span>
+          <code>{initCommand}</code>
+        </div>
+        <button type="button" class="copy-btn" data-copy={initCommand} aria-label="Copy quick start command">
+          <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+          <span data-copy-label>Copy</span>
+        </button>
+      </div>
+
+      <!-- Brand / Tech inline SVG badges -->
+      <div class="tech-strip" aria-label="Built with native technologies">
+        <span class="tech-pill">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" stroke="#f97316" stroke-width="2" />
+            <circle cx="12" cy="12" r="3" fill="#f97316" />
+          </svg>
+          Rust Edition 2024
+        </span>
+        <span class="tech-pill">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="3" fill="#3178c6" />
+            <path d="M8 10h6M11 10v7M15.5 16.5c.6.4 1.3.5 2 .5 1 0 1.6-.4 1.6-1.1 0-.7-.5-1-1.6-1.3-1.2-.3-1.8-.8-1.8-1.6 0-.9.8-1.5 1.9-1.5.7 0 1.3.2 1.7.4" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+          TypeScript Native
+        </span>
+        <span class="tech-pill">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="2.2" fill="#61dafb" />
+            <ellipse cx="12" cy="12" rx="9" ry="3.8" stroke="#61dafb" stroke-width="1.5" />
+            <ellipse cx="12" cy="12" rx="9" ry="3.8" stroke="#61dafb" stroke-width="1.5" transform="rotate(60 12 12)" />
+            <ellipse cx="12" cy="12" rx="9" ry="3.8" stroke="#61dafb" stroke-width="1.5" transform="rotate(120 12 12)" />
+          </svg>
+          React / Preact / Solid
+        </span>
+        <span class="tech-pill">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M3 4h6a3 3 0 0 0 6 0h6v16H3V4Z" fill="#654ff0" />
+            <path d="M7.5 15.5 9 10.5l1.5 5 1.5-5 1.5 5" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          WebAssembly WIT
+        </span>
+      </div>
+
+      <!-- KPI Benchmark Strip -->
+      <div class="kpi-grid" aria-label="Key release benchmark metrics">
+        <div class="kpi-card">
+          <div class="kpi-value">12.65 <span>MB</span></div>
+          <div class="kpi-label">Single Native Binary</div>
+          <div class="kpi-sub">Zero Node.js · unsafe_code = "forbid"</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value">0.232 <span>ms</span></div>
+          <div class="kpi-label">Warm blake3 Cache Hit</div>
+          <div class="kpi-sub">basic-ts · 50-iter --release bench</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value">0.39 <span>ms</span></div>
+          <div class="kpi-label">Cold Oxc TS Transform</div>
+          <div class="kpi-sub">0.52 ms on React TSX + JSX</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value">9.56 <span>ms</span></div>
+          <div class="kpi-label">Min Production Build</div>
+          <div class="kpi-sub">10.49 ms avg · minified + hashed</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature Grid -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-header">
+        <span class="eyebrow">
+          <span class="material-symbols-outlined" aria-hidden="true">layers</span>
+          <span>Core Capabilities</span>
+        </span>
+        <h2>Everything modern web apps need, compiled to native code.</h2>
+        <p>
+          No Babel, no PostCSS plugins, no Rollup glue, and no 400 MB <span class="inline-code">node_modules</span>
+          toolchain tax. Declarative <span class="inline-code">zerho.toml</span> configuration drives the entire pipeline.
+        </p>
+      </div>
+
+      <div class="feature-grid">
+        {features.map((f) => (
+          <article class="card">
+            <div class="card-icon">
+              <span class="material-symbols-outlined" aria-hidden="true">{f.icon}</span>
+            </div>
+            <h3>{f.title}</h3>
+            <p>{f.desc}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Real Benchmarks + Comparison Table -->
+  <section class="section" id="benchmarks">
+    <div class="container">
+      <div class="section-header">
+        <span class="eyebrow">
+          <span class="material-symbols-outlined" aria-hidden="true">speed</span>
+          <span>Real --release Benchmarks</span>
+        </span>
+        <h2>Measured on real builds, not synthetic micro-loops.</h2>
+        <p>
+          Reproducible via <span class="inline-code">zerho bench --iterations 50</span> on Windows
+          using the compiled <span class="inline-code">--release</span> binary (12.65 MB).
+        </p>
+      </div>
+
+      <div class="bench-grid">
+        <div class="bench-card">
+          <div class="bench-head">
+            <h3>basic-ts</h3>
+            <span class="bench-badge">50 iterations · --release</span>
+          </div>
+          <p>TypeScript entry + CSS bundling, AST import rewriting, minification, and manifest emission.</p>
+          <div class="bench-metrics">
+            <div class="bench-metric">
+              <strong>0.39 ms</strong>
+              <span>Cold Oxc Transform</span>
+            </div>
+            <div class="bench-metric">
+              <strong>0.232 ms</strong>
+              <span>Warm blake3 Cache</span>
+            </div>
+            <div class="bench-metric">
+              <strong>9.56 ms</strong>
+              <span>Min Build (10.49 ms avg)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="bench-card">
+          <div class="bench-head">
+            <h3>react-tsx-demo</h3>
+            <span class="bench-badge">50 iterations · --release</span>
+          </div>
+          <p>5 modules + CJS-to-ESM pre-bundling + dynamic import() splitting + 2 Source Maps v3 + tree-shaking.</p>
+          <div class="bench-metrics">
+            <div class="bench-metric">
+              <strong>0.52 ms</strong>
+              <span>Cold TSX Transform</span>
+            </div>
+            <div class="bench-metric">
+              <strong>0.462 ms</strong>
+              <span>Warm blake3 Cache</span>
+            </div>
+            <div class="bench-metric">
+              <strong>17.80 ms</strong>
+              <span>Min Build (20.39 ms avg)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap" role="region" aria-label="Comparison between zerho and Vite 8">
+        <table>
+          <thead>
+            <tr>
+              <th>Dimension</th>
+              <th class="col-zerho">zerho v0.1.0</th>
+              <th>Vite 8 (Rolldown + Node.js)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Runtime Requirement</td>
+              <td class="col-zerho">Zero-Node (single 12.65 MB native binary)</td>
+              <td>Node.js + npm/pnpm runtime required</td>
+            </tr>
+            <tr>
+              <td>Configuration</td>
+              <td class="col-zerho">Declarative <span class="inline-code">zerho.toml</span> + JSON Schema</td>
+              <td>Executable <span class="inline-code">vite.config.ts</span> evaluated in Node</td>
+            </tr>
+            <tr>
+              <td>JS / TS / JSX &amp; CSS Engine</td>
+              <td class="col-zerho">100% in-process <span class="inline-code">oxc</span> + <span class="inline-code">lightningcss</span></td>
+              <td>N-API bridge between JS host &amp; Rust crates</td>
+            </tr>
+            <tr>
+              <td>Persistent Transform Cache</td>
+              <td class="col-zerho">Native <span class="inline-code">blake3</span> disk cache (0.232 ms hits)</td>
+              <td>JS filesystem &amp; dep pre-bundle cache</td>
+            </tr>
+            <tr>
+              <td>Plugin Isolation</td>
+              <td class="col-zerho">Fuel-metered <span class="inline-code">wasmtime</span> WASM (<span class="inline-code">zerho:plugin@0.1.0</span>)</td>
+              <td>Full-privilege Node.js JS plugins</td>
+            </tr>
+            <tr>
+              <td>DevTools &amp; Memory Safety</td>
+              <td class="col-zerho">Built-in <span class="inline-code">/__inspect</span> UI · <span class="inline-code">unsafe_code = "forbid"</span></td>
+              <td>External plugin (<span class="inline-code">vite-plugin-inspect</span>)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9-Crate Architecture -->
+  <section class="section" id="architecture">
+    <div class="container">
+      <div class="section-header">
+        <span class="eyebrow">
+          <span class="material-symbols-outlined" aria-hidden="true">hub</span>
+          <span>Modular Rust Workspace</span>
+        </span>
+        <h2>9 focused crates. 30/30 passing tests. Pedantic clean.</h2>
+        <p>
+          Every layer is cleanly decoupled in a Rust Edition 2024 workspace enforced with
+          <span class="inline-code">clippy::pedantic -D warnings</span> and
+          <span class="inline-code">unsafe_code = "forbid"</span>.
+        </p>
+      </div>
+
+      <div class="crate-grid">
+        {crates.map((c) => (
+          <div class="crate-card">
+            <div class="crate-name">{c.name}</div>
+            <p>{c.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="section">
+    <div class="container">
+      <div class="cta-banner">
+        <div>
+          <h2>Ready to drop Node.js from your build pipeline?</h2>
+          <p>Explore the full <span class="inline-code">zerho.toml</span> reference, CLI commands, HMR API, and WASM WIT contract.</p>
+        </div>
+        <a href="/docs" class="btn btn-primary">
+          <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+          <span>Open Documentation</span>
+        </a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

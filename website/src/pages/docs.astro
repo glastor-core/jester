@@ -1,0 +1,341 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const quickStartCode = `# Scaffold a React + TypeScript project in milliseconds
+zerho init my-app --template react-tsx
+cd my-app
+
+# Start the Zero-Node dev server (HMR + /__inspect DevTools)
+zerho dev
+
+# Build minified, tree-shaken production bundle + manifest.json
+zerho build
+
+# Preview the production dist/ output locally
+zerho preview --port 4173`;
+
+const tomlReference = `[project]
+name = "my-app"
+root = "."
+entry = "src/main.tsx"
+public_dir = "public"
+env_prefix = "ZERHO_"
+framework = "react"          # react | preact | solid | vanilla
+
+[server]
+host = "127.0.0.1"
+port = 5173
+hmr = true
+open = false
+
+[server.proxy]
+"/api" = "http://127.0.0.1:8080"
+
+[build]
+out_dir = "dist"
+minify = true
+sourcemap = "linked"         # none | linked | inline | hidden
+target = "es2022"
+splitting = true             # dynamic import() code splitting
+
+[css]
+modules = true               # native *.module.css via lightningcss
+minify = true
+
+[cache]
+enabled = true
+dir = ".zerho/cache"         # persistent blake3 content-addressed cache`;
+
+const hmrSnippet = `// Granular state-preserving HMR in any module
+let count = import.meta.hot?.data.count ?? 0;
+
+if (import.meta.hot) {
+  import.meta.hot.dispose((data) => {
+    data.count = count;
+  });
+
+  import.meta.hot.accept((nextMod) => {
+    // Hot-swap without losing component or module state
+    console.log('HMR updated:', nextMod);
+  });
+}`;
+
+const cssAssetsSnippet = `// Scoped CSS Modules powered natively by lightningcss
+import styles from './Button.module.css';
+
+// Static asset imports (?import in dev, blake3-hashed emission in prod)
+import logoUrl from './assets/logo.svg';
+
+export function Header() {
+  return (
+    <header className={styles.bar}>
+      <img src={logoUrl} alt="zerho" width="32" height="32" />
+    </header>
+  );
+}`;
+
+const envSnippet = `# .env (only keys matching project.env_prefix are exposed to client code)
+ZERHO_API_URL=https://api.example.com
+SECRET_DB_PASSWORD=never-exposed-to-browser
+
+# In TypeScript:
+const apiUrl = import.meta.env.ZERHO_API_URL;
+const mode   = import.meta.env.MODE; // "development" | "production"`;
+
+const witContract = `package zerho:plugin@0.1.0;
+
+interface types {
+    enum module-kind {
+        js,
+        ts,
+        jsx,
+        tsx,
+        css,
+        json,
+        asset,
+        virtual-mod,
+    }
+
+    record plugin-context {
+        is-dev: bool,
+    }
+
+    record transform-result {
+        code: string,
+        sourcemap: option<string>,
+    }
+}
+
+interface hooks {
+    use types.{module-kind, plugin-context, transform-result};
+
+    name: func() -> string;
+    resolve-id: func(specifier: string, importer: option<string>) -> result<option<string>, string>;
+    load: func(id: string, ctx: plugin-context) -> result<option<string>, string>;
+    transform: func(
+        code: string,
+        id: string,
+        kind: module-kind,
+        ctx: plugin-context,
+    ) -> result<option<transform-result>, string>;
+}
+
+world zerho-plugin {
+    export hooks;
+}`;
+
+const cliCommands = [
+  { cmd: 'zerho init [DIR] --template <NAME>', desc: 'Scaffold a Zero-Node project (basic-ts | react-tsx).' },
+  { cmd: 'zerho dev [--config PATH] [--port PORT]', desc: 'Start the axum + tokio dev server with WebSocket HMR, /@zerho/deps, and /__inspect UI.' },
+  { cmd: 'zerho build [--config PATH]', desc: 'Run two-pass symbol tree-shaking, code splitting, minification, Source Maps v3, and manifest.json emission.' },
+  { cmd: 'zerho preview [--config PATH] [--port PORT]', desc: 'Serve the production dist/ directory locally with PreviewServer.' },
+  { cmd: 'zerho bench [--config PATH] [--iterations N]', desc: 'Run reproducible cold Oxc transform, warm blake3 cache, and full build benchmarks (default: 10 iterations).' },
+  { cmd: 'zerho schema', desc: 'Print the complete JSON Schema for zerho.toml for IDE validation and autocompletion.' },
+  { cmd: 'zerho wit', desc: 'Print the canonical zerho:plugin@0.1.0 WebAssembly Component Model WIT contract.' },
+];
+---
+
+<BaseLayout
+  title="Documentation — zerho v0.1.0"
+  description="Complete documentation for zerho: Quick Start, zerho.toml configuration reference, CLI commands, granular HMR, CSS Modules, .env & proxy, and the zerho:plugin@0.1.0 WASM WIT contract."
+>
+  <div class="container docs-layout">
+    <aside class="docs-sidebar" aria-label="Documentation sections">
+      <div class="docs-sidebar-title">On This Page</div>
+      <ul class="docs-nav">
+        <li><a href="#quick-start">Quick Start</a></li>
+        <li><a href="#zerho-toml">zerho.toml Reference</a></li>
+        <li><a href="#cli">CLI Commands</a></li>
+        <li><a href="#hmr-overlay">HMR &amp; Error Overlay</a></li>
+        <li><a href="#css-assets">CSS Modules &amp; Assets</a></li>
+        <li><a href="#env-proxy">.env &amp; HTTP Proxy</a></li>
+        <li><a href="#wasm-wit">WASM Plugin WIT Contract</a></li>
+      </ul>
+    </aside>
+
+    <article class="docs-content">
+      <section id="quick-start">
+        <div class="eyebrow" style="margin-bottom: 14px;">
+          <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+          <span>Documentation · v0.1.0</span>
+        </div>
+        <h1>zerho Documentation</h1>
+        <p>
+          Everything you need to configure, run, benchmark, and extend <strong>zerho</strong> —
+          the Zero-Node, 100% Rust frontend dev server and production bundler.
+        </p>
+
+        <h2>
+          <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span>
+          Quick Start
+        </h2>
+        <p>
+          Create a new project using <span class="inline-code">zerho init</span> with either the
+          <span class="inline-code">basic-ts</span> or <span class="inline-code">react-tsx</span> template:
+        </p>
+        <div class="code-block">
+          <div class="code-header">
+            <span>bash</span>
+            <button type="button" class="copy-btn" data-copy={quickStartCode} aria-label="Copy quick start commands">
+              <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              <span data-copy-label>Copy</span>
+            </button>
+          </div>
+          <pre><code set:text={quickStartCode} /></pre>
+        </div>
+        <p>
+          Once <span class="inline-code">zerho dev</span> is running, open
+          <span class="inline-code">http://127.0.0.1:5173/__inspect</span> to inspect the live
+          module graph, dependency edges, and <span class="inline-code">blake3</span> disk cache hits.
+        </p>
+      </section>
+
+      <section id="zerho-toml">
+        <h2>
+          <span class="material-symbols-outlined" aria-hidden="true">tune</span>
+          zerho.toml Full Reference
+        </h2>
+        <p>
+          All configuration is declarative and validated at startup by <span class="inline-code">zerho-config</span>.
+          Run <span class="inline-code">zerho schema</span> to generate the official JSON Schema for editor tooling.
+        </p>
+        <div class="code-block">
+          <div class="code-header">
+            <span>zerho.toml</span>
+            <button type="button" class="copy-btn" data-copy={tomlReference} aria-label="Copy zerho.toml reference">
+              <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              <span data-copy-label>Copy</span>
+            </button>
+          </div>
+          <pre><code set:text={tomlReference} /></pre>
+        </div>
+      </section>
+
+      <section id="cli">
+        <h2>
+          <span class="material-symbols-outlined" aria-hidden="true">terminal</span>
+          CLI Commands
+        </h2>
+        <p>
+          All commands ship inside the single 12.65 MB <span class="inline-code">zerho</span> binary.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Command</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cliCommands.map((item) => (
+                <tr>
+                  <td><span class="inline-code">{item.cmd}</span></td>
+                  <td>{item.desc}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="hmr-overlay">
+        <h2>
+          <span class="material-symbols-outlined" aria-hidden="true">speed</span>
+          Granular HMR &amp; Shadow DOM Error Overlay
+        </h2>
+        <p>
+          <span class="inline-code">zerho-server</span> injects the native <span class="inline-code">/@zerho/client</span>
+          WebSocket runtime and walks reverse edges in <span class="inline-code">zerho-graph</span> to invalidate only
+          affected modules. State persists across edits via <span class="inline-code">import.meta.hot.data</span>.
+        </p>
+        <div class="code-block">
+          <div class="code-header">
+            <span>src/counter.ts</span>
+            <button type="button" class="copy-btn" data-copy={hmrSnippet} aria-label="Copy HMR example">
+              <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              <span data-copy-label>Copy</span>
+            </button>
+          </div>
+          <pre><code set:text={hmrSnippet} /></pre>
+        </div>
+        <ul>
+          <li><strong>Shadow DOM Isolation:</strong> Compile errors from <span class="inline-code">oxc</span> or <span class="inline-code">lightningcss</span> render inside <span class="inline-code">&lt;zerho-error-overlay&gt;</span> without leaking app CSS.</li>
+          <li><strong>Auto-Dismiss:</strong> Saving a valid fix clears the overlay automatically over WebSocket without a full page reload.</li>
+        </ul>
+      </section>
+
+      <section id="css-assets">
+        <h2>
+          <span class="material-symbols-outlined" aria-hidden="true">layers</span>
+          CSS Modules &amp; Static Asset Imports
+        </h2>
+        <p>
+          Files ending in <span class="inline-code">.module.css</span> are compiled by <span class="inline-code">lightningcss</span>
+          into scoped class maps. Static assets (SVG, PNG, WebP, fonts) resolve via <span class="inline-code">?import</span> in dev
+          and emit <span class="inline-code">blake3</span>-hashed filenames in production builds.
+        </p>
+        <div class="code-block">
+          <div class="code-header">
+            <span>src/Header.tsx</span>
+            <button type="button" class="copy-btn" data-copy={cssAssetsSnippet} aria-label="Copy CSS Modules and asset example">
+              <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              <span data-copy-label>Copy</span>
+            </button>
+          </div>
+          <pre><code set:text={cssAssetsSnippet} /></pre>
+        </div>
+      </section>
+
+      <section id="env-proxy">
+        <h2>
+          <span class="material-symbols-outlined" aria-hidden="true">shield</span>
+          .env &amp; [server.proxy]
+        </h2>
+        <p>
+          Environment variables loaded from <span class="inline-code">.env</span> are strictly filtered by
+          <span class="inline-code">project.env_prefix</span> (default: <span class="inline-code">ZERHO_</span>)
+          before compile-time injection via <span class="inline-code">DefinePlugin</span>.
+        </p>
+        <div class="code-block">
+          <div class="code-header">
+            <span>.env &amp; client usage</span>
+            <button type="button" class="copy-btn" data-copy={envSnippet} aria-label="Copy env example">
+              <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              <span data-copy-label>Copy</span>
+            </button>
+          </div>
+          <pre><code set:text={envSnippet} /></pre>
+        </div>
+        <p>
+          To forward API requests during local development without CORS friction, map path prefixes under
+          <span class="inline-code">[server.proxy]</span> in <span class="inline-code">zerho.toml</span>
+          (for example <span class="inline-code">"/api" = "http://127.0.0.1:8080"</span>). Static files placed in
+          <span class="inline-code">public/</span> are served at the root URL in dev and copied verbatim into <span class="inline-code">dist/</span>.
+        </p>
+      </section>
+
+      <section id="wasm-wit">
+        <h2>
+          <span class="material-symbols-outlined" aria-hidden="true">extension</span>
+          WASM Plugin WIT Contract (zerho:plugin@0.1.0)
+        </h2>
+        <p>
+          Third-party plugins execute inside a fuel-metered <span class="inline-code">wasmtime v29</span> sandbox
+          (default fuel budget: 1,000,000 instructions) rather than an unrestricted Node.js process. Inspect this
+          contract anytime via <span class="inline-code">zerho wit</span>:
+        </p>
+        <div class="code-block">
+          <div class="code-header">
+            <span>zerho-plugin.wit</span>
+            <button type="button" class="copy-btn" data-copy={witContract} aria-label="Copy WIT contract">
+              <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              <span data-copy-label>Copy</span>
+            </button>
+          </div>
+          <pre><code set:text={witContract} /></pre>
+        </div>
+      </section>
+    </article>
+  </div>
+</BaseLayout>
