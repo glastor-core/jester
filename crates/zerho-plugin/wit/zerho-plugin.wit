@@ -1,0 +1,41 @@
+package zerho:plugin@0.1.0;
+
+interface types {
+    enum module-kind {
+        js,
+        ts,
+        jsx,
+        tsx,
+        css,
+        json,
+        asset,
+        virtual-mod,
+    }
+
+    record plugin-context {
+        is-dev: bool,
+    }
+
+    record transform-result {
+        code: string,
+        sourcemap: option<string>,
+    }
+}
+
+interface hooks {
+    use types.{module-kind, plugin-context, transform-result};
+
+    name: func() -> string;
+    resolve-id: func(specifier: string, importer: option<string>) -> result<option<string>, string>;
+    load: func(id: string, ctx: plugin-context) -> result<option<string>, string>;
+    transform: func(
+        code: string,
+        id: string,
+        kind: module-kind,
+        ctx: plugin-context,
+    ) -> result<option<transform-result>, string>;
+}
+
+world zerho-plugin {
+    export hooks;
+}

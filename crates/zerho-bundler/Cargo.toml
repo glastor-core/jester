@@ -1,0 +1,17 @@
+[package]
+name = "zerho-bundler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+zerho-config.workspace = true
+zerho-core.workspace = true
+zerho-graph.workspace = true
+zerho-plugin.workspace = true
+zerho-resolver.workspace = true
+zerho-transform.workspace = true
+
+[lints]
+workspace = true

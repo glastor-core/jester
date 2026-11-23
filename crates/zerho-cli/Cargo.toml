@@ -1,0 +1,23 @@
+[package]
+name = "zerho-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "zerho"
+path = "src/main.rs"
+
+[dependencies]
+tokio.workspace = true
+zerho-bundler.workspace = true
+zerho-config.workspace = true
+zerho-core.workspace = true
+zerho-graph.workspace = true
+zerho-plugin.workspace = true
+zerho-server.workspace = true
+zerho-transform.workspace = true
+
+[lints]
+workspace = true

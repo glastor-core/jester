@@ -1,0 +1,28 @@
+# zerho — Declarative Zero-Node Frontend Toolchain Config
+
+[project]
+name = "example-app"
+root = "."
+entry = "src/main.tsx"
+framework = "react"
+
+[server]
+host = "127.0.0.1"
+port = 5173
+hmr = true
+open = false
+
+[build]
+out_dir = "dist"
+minify = true
+sourcemap = "linked"
+target = "es2022"
+splitting = true
+
+[css]
+modules = true
+minify = true
+
+[cache]
+enabled = true
+dir = ".zerho/cache"

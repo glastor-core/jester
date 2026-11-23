@@ -1,0 +1,15 @@
+[package]
+name = "zerho-transform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+lightningcss.workspace = true
+oxc.workspace = true
+zerho-core.workspace = true
+zerho-plugin.workspace = true
+
+[lints]
+workspace = true

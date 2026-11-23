@@ -1,0 +1,13 @@
+[package]
+name = "zerho-resolver"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+oxc_resolver.workspace = true
+zerho-core.workspace = true
+
+[lints]
+workspace = true

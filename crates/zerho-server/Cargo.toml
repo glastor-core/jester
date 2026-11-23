@@ -1,0 +1,19 @@
+[package]
+name = "zerho-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+axum.workspace = true
+notify.workspace = true
+tokio.workspace = true
+zerho-config.workspace = true
+zerho-core.workspace = true
+zerho-graph.workspace = true
+zerho-resolver.workspace = true
+zerho-transform.workspace = true
+
+[lints]
+workspace = true
