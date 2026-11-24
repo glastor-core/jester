@@ -3,70 +3,154 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
 const initCommand = 'zerho init my-app --template react-tsx && cd my-app && zerho dev';
 
-const features = [
+const pillars = [
   {
+    id: 'compiler',
+    label: 'Compiler & Assets',
     icon: 'bolt',
-    title: 'Oxc Compiler, Minifier & Scope Hoisting',
-    desc: 'Sub-millisecond TS/JSX transforms, lexical Scope Hoisting (zero runtime wrappers), AST constant folding/DCE, mangling, and Source Maps v3.',
+    headline: 'Native Oxc & LightningCSS pipeline, zero JS bridges.',
+    summary:
+      'TypeScript, JSX, CSS Modules, SVG, and WebP optimization execute directly inside one Rust binary — no Babel, PostCSS, Rollup, or sharp.',
+    codeLabel: 'zerho.toml · compiler & assets',
+    code: `[build]
+minify = true           # oxc_minifier + mangler + DCE
+scope_hoisting = true   # zero runtime module wrappers
+sourcemap = "linked"
+
+[assets]
+optimize_svg = true     # pure-Rust SVG minifier
+optimize_images = true  # PNG/JPG -> lossless WebP`,
+    items: [
+      {
+        icon: 'bolt',
+        title: 'Oxc Compiler, Minifier & Scope Hoisting',
+        desc: 'Sub-millisecond TS/JSX transforms, lexical Scope Hoisting, AST constant folding/DCE, mangling, and Source Maps v3.',
+      },
+      {
+        icon: 'layers',
+        title: 'LightningCSS, @import & url() Rewriting',
+        desc: 'Built-in CSS nesting, *.module.css scoped class maps, @import inlining, and blake3-hashed font/image asset URLs.',
+      },
+      {
+        icon: 'image',
+        title: 'Pure-Rust SVG & WebP Image Optimizer',
+        desc: 'Strips SVG metadata/comments and converts PNG/JPG assets to smaller WebP automatically without Node or native C++ addons.',
+      },
+    ],
   },
   {
-    icon: 'layers',
-    title: 'LightningCSS, SVG & WebP Image Optimizer',
-    desc: 'Built-in CSS nesting, *.module.css scoped class maps, pure-Rust SVG minification, and automatic PNG/JPG to WebP conversion without sharp or Node.',
-  },
-  {
-    icon: 'hub',
-    title: 'Native tsconfig Paths & Barrel Optimizer',
-    desc: 'Zero-config @/* alias resolution via oxc_resolver plus AST Barrel File bypassing so unused re-exported modules are never loaded or parsed.',
-  },
-  {
+    id: 'dev',
+    label: 'Dev Server & Cache',
     icon: 'speed',
-    title: 'React Fast Refresh & Zero-Waterfall Dev',
-    desc: 'Native oxc React Fast Refresh ($RefreshReg$), in-memory Dev Partial Bundling (/@zerho/bundle), granular HMR, and Shadow DOM Error Overlay.',
+    headline: 'Instant startup, React Fast Refresh & ACID redb cache.',
+    summary:
+      'Skip 400 MB node_modules waterfalls with in-memory Dev Partial Bundling, deep CJS-to-ESM pre-bundling, and 1.7 µs local/remote cache hits.',
+    codeLabel: 'terminal · zero-node dev workflow',
+    code: `$ zerho migrate              # auto-convert vite.config.*
+$ zerho dev --port 5173      # HMR + /@zerho/bundle
+
+# Open live module graph & treemap:
+# -> http://127.0.0.1:5173/__inspect`,
+    items: [
+      {
+        icon: 'speed',
+        title: 'React Fast Refresh & Zero-Waterfall Dev',
+        desc: 'Native oxc Fast Refresh ($RefreshReg$), /@zerho/bundle partial bundling, granular WebSocket HMR, and Shadow DOM Error Overlay.',
+      },
+      {
+        icon: 'database',
+        title: 'ACID redb B-Tree + HTTP Remote Team Cache',
+        desc: 'Single-file embedded redb cache with optional HTTP remote team cache (cache.remote_url) accelerating both zerho dev and zerho build.',
+      },
+      {
+        icon: 'hub',
+        title: 'Native tsconfig Paths, CJS Pre-Bundler & Barrel Optimizer',
+        desc: 'Zero-config @/* aliases, recursive multi-file CommonJS require() pre-bundling, and AST Barrel bypassing for unused exports.',
+      },
+    ],
   },
   {
-    icon: 'database',
-    title: 'Acid redb Cache + Remote Team Cache',
-    desc: 'Single-file embedded redb B-tree cache with HTTP remote team cache fallback (cache.remote_url) accelerating both zerho dev and zerho build.',
-  },
-  {
+    id: 'bundler',
+    label: 'Bundler & Edge SSR',
     icon: 'call_split',
-    title: 'Rayon Parallel Bundler & Shared Chunks',
-    desc: 'Multi-core parallel graph builds, automatic shared chunk deduplication across dynamic import(), <link rel="modulepreload">, and Brotli .br emission.',
+    headline: 'Parallel multi-core builds for SPAs, MPAs, Libraries & Edge.',
+    summary:
+      'Emit Scope-Hoisted production bundles, hashed Web Workers, streaming .wasm modules, or DOM-free Edge SSR bundles from the same graph.',
+    codeLabel: 'terminal · production & edge targets',
+    code: `$ zerho build --analyze      # dist/ + dist/stats.html
+$ zerho build --ssr          # DOM-free dist/server.mjs
+$ zerho build --watch        # incremental rebuilds
+$ zerho preview --port 4173  # native Brotli .br server`,
+    items: [
+      {
+        icon: 'call_split',
+        title: 'Rayon Parallel Bundler & Shared Chunks',
+        desc: 'Multi-core parallel graph builds, automatic shared chunk deduplication across dynamic import() and MPA entries, plus Brotli .br.',
+      },
+      {
+        icon: 'memory',
+        title: 'Web Workers & Streaming .wasm Imports',
+        desc: 'Auto-detects new Worker(new URL(..., import.meta.url)) and .wasm imports, emitting hashed worker chunks and instantiateStreaming loaders.',
+      },
+      {
+        icon: 'cloud',
+        title: 'Edge SSR Target (--ssr) & Library Mode',
+        desc: 'Emit DOM-free dist/server.mjs for Cloudflare Workers, Deno, Node, and Bun, or dual .mjs/.cjs packages via [build.lib].',
+      },
+    ],
   },
   {
+    id: 'security',
+    label: 'Security & Plugins',
     icon: 'shield',
-    title: 'Built-in SRI, CSP, Budgets & Secret Guard',
-    desc: 'Native SHA-384 integrity attributes, strict dist/csp.json, Gzip/Brotli bundle budgets, and client-side secret leak scanning before ship.',
-  },
-  {
-    icon: 'fact_check',
-    title: 'zerho check & dist/stats.html Analyzer',
-    desc: 'Full-graph static auditor catching broken imports, circular dependencies, and missing .env vars in milliseconds, plus an interactive HTML treemap.',
-  },
-  {
-    icon: 'extension',
-    title: 'Safe Rust Binary & Wasmtime Plugins',
-    desc: 'Rust Edition 2024, unsafe_code = "forbid", clippy::pedantic -D warnings, and fuel-metered WASM plugins (zerho:plugin@0.1.0 WIT).',
+    headline: 'Memory-safe core with built-in security & WASM isolation.',
+    summary:
+      'Every workspace crate enforces unsafe_code = "forbid" and clippy::pedantic, while third-party plugins run inside fuel-metered wasmtime sandboxes.',
+    codeLabel: 'zerho.toml · security & wasm plugins',
+    code: `[security]
+sri = true             # SHA-384 integrity in HTML
+csp = true             # strict dist/csp.json
+secret_scan = true     # block leaked API keys
+
+[plugins]
+wasm = ["plugins/my-plugin.wasm"]
+fuel_limit = 1000000   # zerho:plugin@0.1.0`,
+    items: [
+      {
+        icon: 'shield',
+        title: 'Built-in SRI, CSP, Budgets & Secret Leak Guard',
+        desc: 'Native SHA-384 integrity attributes, strict dist/csp.json, Gzip/Brotli size budgets, and client-side secret scanning before ship.',
+      },
+      {
+        icon: 'fact_check',
+        title: 'zerho check, dist/stats.html & Live /__inspect Treemap',
+        desc: 'Full-graph static auditor catching broken imports, cycles, and missing .env vars, paired with live interactive bundle treemaps.',
+      },
+      {
+        icon: 'extension',
+        title: 'Fuel-Metered Wasmtime Plugins (UTF-8 String ABI)',
+        desc: 'Run resolve_id, load, and transform hooks inside isolated wasmtime v29 linear memory with a complete Rust -> .wasm example included.',
+      },
+    ],
   },
 ];
 
 const crates = [
-  { name: 'zerho-core', desc: 'Core identifiers (ModuleId, blake3 ContentHash), ModuleKind, Framework, and typed error hierarchy.' },
-  { name: 'zerho-config', desc: 'Declarative zerho.toml parser, validator, budgets/security/remote-cache config, and JSON Schema generator.' },
-  { name: 'zerho-resolver', desc: 'Native ESM/CJS & tsconfig.json paths resolution powered by oxc_resolver, package.json exports, and virtual modules.' },
-  { name: 'zerho-graph', desc: 'Incremental module graph, DFS circular dependency detector, embedded redb cache, and HTTP remote team cache.' },
-  { name: 'zerho-plugin', desc: 'Native Plugin trait (DefinePlugin), fuel-metered wasmtime v29 host, and zerho:plugin@0.1.0 WIT contract.' },
-  { name: 'zerho-transform', desc: 'Oxc TS/JSX compiler, Minifier/Mangler, Scope Hoisting, Barrel Optimizer, SVG optimizer, and lightningcss pipeline.' },
-  { name: 'zerho-server', desc: 'Zero-Node axum + tokio + notify dev server, WebSocket HMR, /@zerho/bundle, /__inspect UI, and Brotli PreviewServer.' },
-  { name: 'zerho-bundler', desc: 'Rayon parallel bundler with incremental redb cache, Shared Chunks + modulepreload, Brotli .br, SRI/CSP, zerho check, and stats.html.' },
-  { name: 'zerho-cli', desc: 'Single native CLI binary: dev, build (--analyze, --watch, --ssr), migrate, check (--strict), preview, bench, init, schema, and wit.' },
+  { idx: '01', name: 'zerho-core', desc: 'Core identifiers (ModuleId, blake3 ContentHash), ModuleKind, Framework, and typed error hierarchy.' },
+  { idx: '02', name: 'zerho-config', desc: 'Declarative zerho.toml parser, validator, MPA/SSR/budgets/security config, and JSON Schema generator.' },
+  { idx: '03', name: 'zerho-resolver', desc: 'Native ESM/CJS & tsconfig.json paths resolution powered by oxc_resolver, package.json exports, and virtual modules.' },
+  { idx: '04', name: 'zerho-graph', desc: 'Incremental module graph, DFS circular dependency detector, embedded redb cache, and HTTP remote team cache.' },
+  { idx: '05', name: 'zerho-plugin', desc: 'Native Plugin trait (DefinePlugin), fuel-metered wasmtime v29 host with UTF-8 string hooks, and zerho:plugin@0.1.0 WIT.' },
+  { idx: '06', name: 'zerho-transform', desc: 'Oxc TS/JSX compiler, Minifier/Mangler, Scope Hoisting, Barrel & CJS pre-bundler, Web Workers, CSS @import/url(), and SVG.' },
+  { idx: '07', name: 'zerho-server', desc: 'Zero-Node axum + tokio + notify dev server, WebSocket HMR, /@zerho/bundle, /__inspect Live Treemap, and Brotli PreviewServer.' },
+  { idx: '08', name: 'zerho-bundler', desc: 'Rayon parallel bundler with redb cache, Shared Chunks + modulepreload, MPA, SSR Edge target, WebP, SRI/CSP, and stats.html.' },
+  { idx: '09', name: 'zerho-cli', desc: 'Single native CLI binary: dev, build (--analyze, --watch, --ssr), migrate, check (--strict), preview, bench, init, schema, and wit.' },
 ];
 ---
 
 <BaseLayout
   title="zerho — Zero-Node, 100% Rust Frontend Dev Server & Bundler"
-  description="Single 16.60 MB native Rust binary replacing Node.js in your frontend toolchain. 0.0017 ms redb cache hits, Scope Hoisting, oxc_minifier, React Fast Refresh, Brotli, and Library Mode."
+  description="Single 16.60 MB native Rust binary replacing Node.js in your frontend toolchain. 0.0017 ms redb cache hits, Scope Hoisting, oxc_minifier, React Fast Refresh, Web Workers, Edge SSR, and WASM plugins."
 >
   <!-- Hero -->
   <section class="hero">
@@ -143,24 +227,24 @@ const crates = [
         </span>
       </div>
 
-      <!-- KPI Benchmark Strip (synced 1:1 with benchmarks/results.json) -->
-      <div class="kpi-grid" aria-label="Key release benchmark metrics">
-        <div class="kpi-card">
+      <!-- Unified KPI Bar (synced 1:1 with benchmarks/results.json) -->
+      <div class="kpi-bar" aria-label="Key release benchmark metrics">
+        <div class="kpi-cell">
           <div class="kpi-value">16.60 <span>MB</span></div>
           <div class="kpi-label">Single Native Binary</div>
           <div class="kpi-sub">Zero Node.js · 100% Safe Rust</div>
         </div>
-        <div class="kpi-card">
+        <div class="kpi-cell">
           <div class="kpi-value">0.0017 <span>ms</span></div>
           <div class="kpi-label">Warm redb Cache Hit</div>
           <div class="kpi-sub">1.7 µs ACID B-tree lookup · basic-ts</div>
         </div>
-        <div class="kpi-card">
+        <div class="kpi-cell">
           <div class="kpi-value">0.548 <span>ms</span></div>
           <div class="kpi-label">Cold Oxc TSX Transform</div>
           <div class="kpi-sub">0.553 ms on TypeScript entry</div>
         </div>
-        <div class="kpi-card">
+        <div class="kpi-cell">
           <div class="kpi-value">19.32 <span>ms</span></div>
           <div class="kpi-label">Warm Build (basic-ts · 3 mods)</div>
           <div class="kpi-sub">43.04 ms cold · 763 ms on 500 mods</div>
@@ -169,7 +253,7 @@ const crates = [
     </div>
   </section>
 
-  <!-- Feature Grid -->
+  <!-- Core Capabilities (Interactive 4-Pillar Editorial Layout) -->
   <section class="section" id="features">
     <div class="container">
       <div class="section-header">
@@ -184,17 +268,62 @@ const crates = [
         </p>
       </div>
 
-      <div class="feature-grid">
-        {features.map((f) => (
-          <article class="card">
-            <div class="card-icon">
-              <span class="material-symbols-outlined" aria-hidden="true">{f.icon}</span>
-            </div>
-            <h3>{f.title}</h3>
-            <p>{f.desc}</p>
-          </article>
+      <div class="pillar-tabs" role="tablist" aria-label="Zerho capability pillars">
+        {pillars.map((p, idx) => (
+          <button
+            type="button"
+            class="pillar-tab"
+            role="tab"
+            id={`tab-${p.id}`}
+            aria-controls={`panel-${p.id}`}
+            aria-selected={idx === 0 ? 'true' : 'false'}
+            data-pillar-tab={p.id}
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">{p.icon}</span>
+            <span>{p.label}</span>
+          </button>
         ))}
       </div>
+
+      {pillars.map((p, idx) => (
+        <div
+          class="pillar-panel"
+          role="tabpanel"
+          id={`panel-${p.id}`}
+          aria-labelledby={`tab-${p.id}`}
+          data-pillar-panel={p.id}
+          hidden={idx !== 0}
+        >
+          <div class="pillar-lead">
+            <h3>{p.headline}</h3>
+            <p>{p.summary}</p>
+            <div class="code-block" style="margin: 0;">
+              <div class="code-header">
+                <span>{p.codeLabel}</span>
+                <button type="button" class="copy-btn" data-copy={p.code} aria-label={`Copy ${p.label} snippet`}>
+                  <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+                  <span data-copy-label>Copy</span>
+                </button>
+              </div>
+              <pre><code set:text={p.code} /></pre>
+            </div>
+          </div>
+
+          <ul class="pillar-list">
+            {p.items.map((item) => (
+              <li class="pillar-item">
+                <span class="pillar-item-icon" aria-hidden="true">
+                  <span class="material-symbols-outlined">{item.icon}</span>
+                </span>
+                <div>
+                  <h4>{item.title}</h4>
+                  <p>{item.desc}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   </section>
 
@@ -215,88 +344,86 @@ const crates = [
 
       <div class="bench-grid">
         <div class="bench-card">
-          <div class="bench-head">
-            <h3>basic-ts (3 modules)</h3>
-            <span class="bench-badge">20 iters · Scope Hoisted</span>
+          <div>
+            <div class="bench-head">
+              <h3>basic-ts (3 mods)</h3>
+              <span class="bench-badge">Scope Hoisted</span>
+            </div>
+            <p>TypeScript + CSS, Scope Hoisting, oxc_minifier, Brotli .br (458 B), SHA-384 SRI &amp; CSP.</p>
           </div>
-          <p>TypeScript + CSS, Scope Hoisting, oxc_minifier, Brotli .br (458 B), SHA-384 SRI, and CSP manifest.</p>
           <div class="bench-metrics">
             <div class="bench-metric">
               <strong>0.553 ms</strong>
-              <span>Cold Oxc Transform</span>
+              <span>Cold Oxc</span>
             </div>
             <div class="bench-metric">
-              <strong>0.0017 ms</strong>
-              <span>Warm redb Hit (1.7 µs)</span>
+              <strong>1.7 µs</strong>
+              <span>redb Hit</span>
             </div>
             <div class="bench-metric">
               <strong>19.32 ms</strong>
-              <span>Warm Min (43.04 ms cold)</span>
+              <span>Warm Min</span>
             </div>
           </div>
         </div>
 
         <div class="bench-card">
-          <div class="bench-head">
-            <h3>react-tsx-demo (5 modules)</h3>
-            <span class="bench-badge">20 iters · Code Split</span>
+          <div>
+            <div class="bench-head">
+              <h3>react-tsx (5 mods)</h3>
+              <span class="bench-badge">Code Split</span>
+            </div>
+            <p>React TSX + CJS-to-ESM + dynamic import() splitting + 2 Source Maps v3 + Brotli (1.00 KB).</p>
           </div>
-          <p>React TSX + CJS-to-ESM + dynamic import() splitting + 2 Source Maps v3 + Brotli .br (1.00 KB).</p>
           <div class="bench-metrics">
             <div class="bench-metric">
               <strong>0.548 ms</strong>
-              <span>Cold TSX Transform</span>
+              <span>Cold TSX</span>
             </div>
             <div class="bench-metric">
-              <strong>0.0020 ms</strong>
-              <span>Warm redb Hit (2.0 µs)</span>
+              <strong>2.0 µs</strong>
+              <span>redb Hit</span>
             </div>
             <div class="bench-metric">
               <strong>29.18 ms</strong>
-              <span>Warm Min (60.27 ms cold)</span>
+              <span>Warm Min</span>
             </div>
           </div>
         </div>
 
         <div class="bench-card">
-          <div class="bench-head">
-            <h3>synthetic-500-modules</h3>
-            <span class="bench-badge">500 TS mods · 499 shaken</span>
+          <div>
+            <div class="bench-head">
+              <h3>synthetic-500</h3>
+              <span class="bench-badge">499 Shaken</span>
+            </div>
+            <p>Deterministic 500-module TS graph: rayon parallel + Scope Hoisting + oxc_minifier + Brotli (1.53 KB).</p>
           </div>
-          <p>Deterministic 500-module TS graph: rayon parallel + Scope Hoisting + oxc_minifier + Brotli (1.53 KB).</p>
           <div class="bench-metrics">
             <div class="bench-metric">
               <strong>1,254 ms</strong>
-              <span>Cold Build (empty cache)</span>
+              <span>Cold Build</span>
             </div>
             <div class="bench-metric">
-              <strong>763.53 ms</strong>
-              <span>Warm redb Build Min</span>
+              <strong>763.5 ms</strong>
+              <span>Warm Min</span>
             </div>
             <div class="bench-metric">
-              <strong>655 mods/s</strong>
-              <span>End-to-End Throughput</span>
+              <strong>655/s</strong>
+              <span>Mods/sec</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Transparent Hardware & Reproducibility Box -->
-      <div class="card" style="margin-top: 24px;">
-        <div class="bench-head" style="margin-bottom: 10px;">
-          <h3 style="display:flex;align-items:center;gap:8px;margin:0;">
-            <span class="material-symbols-outlined" aria-hidden="true">verified</span>
-            <span>Reference Hardware &amp; 1-Command Verification</span>
-          </h3>
-          <span class="bench-badge">benchmarks/results.json</span>
+      <!-- Compact Reference Hardware & Reproducibility Strip -->
+      <div class="hw-strip">
+        <div class="hw-meta">
+          <strong style="color:#fff;">Verified Reference Hardware</strong> (<span class="inline-code">benchmarks/results.json</span>) —
+          AMD Zen 3 (16 threads) · Windows 11 x86_64 · <span class="inline-code">rustc 1.96.1</span> ·
+          <span class="inline-code">zerho --release</span> (16.60 MB) ·
+          <span class="inline-code">scope_hoisting=true minify=true brotli=true sri=true</span>
         </div>
-        <p style="margin-bottom: 14px;">
-          <strong>Host:</strong> AMD Zen 3 (Family 25 Model 80, 16 logical threads) ·
-          <strong>OS:</strong> Windows 11 x86_64 (NT 10.0.26300.0) ·
-          <strong>Toolchain:</strong> <span class="inline-code">rustc 1.96.1</span> ·
-          <strong>Binary:</strong> <span class="inline-code">zerho 0.7.0 --release</span> (16.60 MB) ·
-          <strong>Flags:</strong> <span class="inline-code">scope_hoisting=true minify=true brotli=true sri=true</span>.
-        </p>
         <div class="cli-box" style="margin: 0; max-width: 100%;" role="region" aria-label="Reproduce benchmark command">
           <div class="cli-code">
             <span class="cli-prompt" aria-hidden="true">$</span>
@@ -365,10 +492,10 @@ const crates = [
     </div>
   </section>
 
-  <!-- 9-Crate Architecture -->
+  <!-- 9-Crate Architecture (Split Sticky Intro + Hairline Ledger) -->
   <section class="section" id="architecture">
-    <div class="container">
-      <div class="section-header">
+    <div class="container arch-split">
+      <div class="arch-sticky">
         <span class="eyebrow">
           <span class="material-symbols-outlined" aria-hidden="true">hub</span>
           <span>Modular Rust Workspace</span>
@@ -379,16 +506,22 @@ const crates = [
           <span class="inline-code">clippy::pedantic -D warnings</span> and
           <span class="inline-code">unsafe_code = "forbid"</span>.
         </p>
+        <div class="arch-stats">
+          <span class="arch-stat">Edition 2024</span>
+          <span class="arch-stat">unsafe_code = "forbid"</span>
+          <span class="arch-stat">60/60 tests</span>
+        </div>
       </div>
 
-      <div class="crate-grid">
+      <ol class="crate-ledger" aria-label="Workspace crates">
         {crates.map((c) => (
-          <div class="crate-card">
-            <div class="crate-name">{c.name}</div>
-            <p>{c.desc}</p>
-          </div>
+          <li class="crate-row">
+            <span class="crate-idx">{c.idx}</span>
+            <span class="crate-name">{c.name}</span>
+            <span class="crate-desc">{c.desc}</span>
+          </li>
         ))}
-      </div>
+      </ol>
     </div>
   </section>
 
@@ -407,4 +540,18 @@ const crates = [
       </div>
     </div>
   </section>
+
+  <script is:inline>
+    const tabs = document.querySelectorAll('[data-pillar-tab]');
+    const panels = document.querySelectorAll('[data-pillar-panel]');
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const target = tab.getAttribute('data-pillar-tab');
+        tabs.forEach((t) => t.setAttribute('aria-selected', String(t === tab)));
+        panels.forEach((p) => {
+          p.hidden = p.getAttribute('data-pillar-panel') !== target;
+        });
+      });
+    });
+  </script>
 </BaseLayout>

@@ -412,28 +412,33 @@ a:focus-visible {
   color: var(--green);
 }
 
-/* KPI Strip */
-.kpi-grid {
+/* Unified KPI Bar (replaces 4 separate boxes) */
+.kpi-bar {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
   margin-top: 48px;
-}
-
-.kpi-card {
-  background: var(--surface);
+  background: rgba(17, 24, 39, 0.72);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 22px 20px;
+  overflow: hidden;
+}
+
+.kpi-cell {
+  padding: 22px 22px;
   text-align: left;
+  border-right: 1px solid var(--border);
+}
+
+.kpi-cell:last-child {
+  border-right: none;
 }
 
 .kpi-value {
   font-family: var(--font-mono);
-  font-size: clamp(1.5rem, 2.5vw, 2.05rem);
+  font-size: clamp(1.45rem, 2.3vw, 1.95rem);
   font-weight: 700;
   color: #ffffff;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
 
 .kpi-value span {
@@ -441,119 +446,199 @@ a:focus-visible {
 }
 
 .kpi-label {
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   font-weight: 600;
   color: var(--text);
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
 .kpi-sub {
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: 0.73rem;
   color: var(--text-dim);
 }
 
-/* Feature Grid */
-.feature-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 18px;
+/* Interactive Capability Pillars (replaces 9 repetitive cards) */
+.pillar-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
 }
 
-.card {
-  background: var(--surface);
+.pillar-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 999px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 24px;
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
-.card:hover {
+.pillar-tab:hover {
+  color: #ffffff;
   border-color: var(--border-strong);
-  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.03);
 }
 
-.card-icon {
+.pillar-tab[aria-selected="true"] {
+  color: #090d14;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.pillar-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: 40px;
+  align-items: start;
+}
+
+.pillar-panel[hidden] {
+  display: none;
+}
+
+.pillar-lead h3 {
+  font-size: clamp(1.35rem, 2.2vw, 1.7rem);
+  margin-bottom: 10px;
+}
+
+.pillar-lead p {
+  font-size: 0.98rem;
+  margin-bottom: 20px;
+}
+
+.pillar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.pillar-item {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 16px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+  align-items: start;
+}
+
+.pillar-item-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   background: var(--accent-dim);
-  border: 1px solid var(--accent-border);
   color: var(--accent-bright);
-  margin-bottom: 16px;
 }
 
-.card h3 {
-  font-size: 1.12rem;
-  margin-bottom: 8px;
+.pillar-item h4 {
+  font-size: 1.04rem;
+  margin-bottom: 5px;
 }
 
-.card p {
-  font-size: 0.93rem;
+.pillar-item p {
+  font-size: 0.91rem;
+  line-height: 1.55;
 }
 
-/* Benchmarks */
+/* Benchmarks (3-column balanced row + sleek hardware strip) */
 .bench-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-  margin-bottom: 32px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .bench-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 26px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .bench-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.bench-head h3 {
+  font-size: 1.05rem;
+}
+
+.bench-card > p {
+  font-size: 0.87rem;
   margin-bottom: 16px;
 }
 
 .bench-badge {
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   color: var(--green);
   background: var(--green-dim);
   border: 1px solid rgba(52, 211, 153, 0.3);
-  padding: 3px 9px;
+  padding: 3px 8px;
   border-radius: 999px;
 }
 
 .bench-metrics {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.bench-metric {
-  background: #0b111c;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 12px;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
 }
 
 .bench-metric strong {
   display: block;
   font-family: var(--font-mono);
-  font-size: 1.15rem;
+  font-size: 0.98rem;
   color: var(--accent-bright);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .bench-metric span {
   display: block;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.hw-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 22px;
+  margin-bottom: 28px;
+  background: rgba(11, 17, 28, 0.75);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+
+.hw-meta {
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  line-height: 1.6;
 }
 
 /* Tables */
@@ -600,30 +685,83 @@ td:first-child {
   background: rgba(249, 115, 22, 0.06);
 }
 
-/* Crates grid */
-.crate-grid {
+/* Workspace Architecture Ledger (replaces 9 repetitive crate cards) */
+.arch-split {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.35fr);
+  gap: 48px;
+  align-items: start;
 }
 
-.crate-card {
-  background: var(--surface);
+.arch-sticky {
+  position: sticky;
+  top: 96px;
+}
+
+.arch-sticky h2 {
+  font-size: clamp(1.75rem, 3vw, 2.35rem);
+  margin: 12px 0 14px;
+}
+
+.arch-sticky p {
+  font-size: 0.98rem;
+  margin-bottom: 22px;
+}
+
+.arch-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.arch-stat {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  padding: 5px 10px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 18px 20px;
+  border-radius: 6px;
+  background: rgba(17, 24, 39, 0.6);
+}
+
+.crate-ledger {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.crate-row {
+  display: grid;
+  grid-template-columns: 32px 158px minmax(0, 1fr);
+  gap: 14px;
+  align-items: baseline;
+  padding: 15px 10px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.14s ease;
+}
+
+.crate-row:hover {
+  background: rgba(249, 115, 22, 0.04);
+}
+
+.crate-idx {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-dim);
 }
 
 .crate-name {
   font-family: var(--font-mono);
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   font-weight: 600;
   color: var(--accent-bright);
-  margin-bottom: 6px;
 }
 
-.crate-card p {
-  font-size: 0.86rem;
+.crate-desc {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.5;
 }
 
 /* CTA Banner */
@@ -809,15 +947,24 @@ td:first-child {
 
 /* Responsive */
 @media (max-width: 960px) {
-  .kpi-grid {
+  .kpi-bar {
     grid-template-columns: repeat(2, 1fr);
   }
-  .feature-grid,
-  .crate-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .kpi-cell:nth-child(2) {
+    border-right: none;
   }
+  .kpi-cell:nth-child(1),
+  .kpi-cell:nth-child(2) {
+    border-bottom: 1px solid var(--border);
+  }
+  .pillar-panel,
+  .arch-split,
   .bench-grid {
     grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .arch-sticky {
+    position: static;
   }
   .docs-layout {
     grid-template-columns: 1fr;
@@ -846,9 +993,22 @@ td:first-child {
   .nav-links.open {
     display: flex;
   }
-  .kpi-grid,
-  .feature-grid,
-  .crate-grid,
+  .kpi-bar {
+    grid-template-columns: 1fr;
+  }
+  .kpi-cell {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .kpi-cell:last-child {
+    border-bottom: none;
+  }
+  .crate-row {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+  .crate-desc {
+    grid-column: 2;
+  }
   .bench-metrics {
     grid-template-columns: 1fr;
   }
