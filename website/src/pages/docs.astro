@@ -195,7 +195,7 @@ const cliCommands = [
     <article class="docs-content">
       <section id="quick-start">
         <div class="eyebrow" style="margin-bottom: 14px;">
-          <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">menu_book</span>
           <span>Documentation · v0.9.0</span>
         </div>
         <h1>zerho Documentation</h1>
@@ -205,58 +205,58 @@ const cliCommands = [
         </p>
 
         <h2>
-          <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">rocket_launch</span>
           Quick Start
         </h2>
         <p>
-          Create a new project using <span class="inline-code">zerho init</span> with either the
-          <span class="inline-code">basic-ts</span> or <span class="inline-code">react-tsx</span> template:
+          Create a new project using <span class="inline-code notranslate" translate="no">zerho init</span> with either the
+          <span class="inline-code notranslate" translate="no">basic-ts</span> or <span class="inline-code notranslate" translate="no">react-tsx</span> template:
         </p>
         <div class="code-block">
           <div class="code-header">
             <span>bash</span>
             <button type="button" class="copy-btn" data-copy={quickStartCode} aria-label="Copy quick start commands">
-              <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">content_copy</span>
               <span data-copy-label>Copy</span>
             </button>
           </div>
-          <pre><code set:text={quickStartCode} /></pre>
+          <pre class="notranslate" translate="no"><code set:text={quickStartCode} /></pre>
         </div>
         <p>
-          Once <span class="inline-code">zerho dev</span> is running, open
-          <span class="inline-code">http://127.0.0.1:5173/__inspect</span> to inspect the live
-          module graph, dependency edges, and <span class="inline-code">blake3</span> disk cache hits.
+          Once <span class="inline-code notranslate" translate="no">zerho dev</span> is running, open
+          <span class="inline-code notranslate" translate="no">http://127.0.0.1:5173/__inspect</span> to inspect the live
+          module graph, dependency edges, and <span class="inline-code notranslate" translate="no">blake3</span> disk cache hits.
         </p>
       </section>
 
       <section id="zerho-toml">
         <h2>
-          <span class="material-symbols-outlined" aria-hidden="true">tune</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">tune</span>
           zerho.toml Full Reference
         </h2>
         <p>
-          All configuration is declarative and validated at startup by <span class="inline-code">zerho-config</span>.
-          Run <span class="inline-code">zerho schema</span> to generate the official JSON Schema for editor tooling.
+          All configuration is declarative and validated at startup by <span class="inline-code notranslate" translate="no">zerho-config</span>.
+          Run <span class="inline-code notranslate" translate="no">zerho schema</span> to generate the official JSON Schema for editor tooling.
         </p>
         <div class="code-block">
           <div class="code-header">
             <span>zerho.toml</span>
             <button type="button" class="copy-btn" data-copy={tomlReference} aria-label="Copy zerho.toml reference">
-              <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">content_copy</span>
               <span data-copy-label>Copy</span>
             </button>
           </div>
-          <pre><code set:text={tomlReference} /></pre>
+          <pre class="notranslate" translate="no"><code set:text={tomlReference} /></pre>
         </div>
       </section>
 
       <section id="cli">
         <h2>
-          <span class="material-symbols-outlined" aria-hidden="true">terminal</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">terminal</span>
           CLI Commands
         </h2>
         <p>
-          All commands ship inside the single 16.60 MB <span class="inline-code">zerho</span> binary.
+          All commands ship inside the single 16.60 MB <span class="inline-code notranslate" translate="no">zerho</span> binary.
         </p>
         <div class="table-wrap">
           <table>
@@ -269,7 +269,7 @@ const cliCommands = [
             <tbody>
               {cliCommands.map((item) => (
                 <tr>
-                  <td><span class="inline-code">{item.cmd}</span></td>
+                  <td><span class="inline-code notranslate" translate="no">{item.cmd}</span></td>
                   <td>{item.desc}</td>
                 </tr>
               ))}
@@ -280,99 +280,99 @@ const cliCommands = [
 
       <section id="hmr-overlay">
         <h2>
-          <span class="material-symbols-outlined" aria-hidden="true">speed</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">speed</span>
           Granular HMR &amp; Shadow DOM Error Overlay
         </h2>
         <p>
-          <span class="inline-code">zerho-server</span> injects the native <span class="inline-code">/@zerho/client</span>
-          WebSocket runtime and walks reverse edges in <span class="inline-code">zerho-graph</span> to invalidate only
-          affected modules. State persists across edits via <span class="inline-code">import.meta.hot.data</span>.
+          <span class="inline-code notranslate" translate="no">zerho-server</span> injects the native <span class="inline-code notranslate" translate="no">/@zerho/client</span>
+          WebSocket runtime and walks reverse edges in <span class="inline-code notranslate" translate="no">zerho-graph</span> to invalidate only
+          affected modules. State persists across edits via <span class="inline-code notranslate" translate="no">import.meta.hot.data</span>.
         </p>
         <div class="code-block">
           <div class="code-header">
             <span>src/counter.ts</span>
             <button type="button" class="copy-btn" data-copy={hmrSnippet} aria-label="Copy HMR example">
-              <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">content_copy</span>
               <span data-copy-label>Copy</span>
             </button>
           </div>
-          <pre><code set:text={hmrSnippet} /></pre>
+          <pre class="notranslate" translate="no"><code set:text={hmrSnippet} /></pre>
         </div>
         <ul>
-          <li><strong>Shadow DOM Isolation:</strong> Compile errors from <span class="inline-code">oxc</span> or <span class="inline-code">lightningcss</span> render inside <span class="inline-code">&lt;zerho-error-overlay&gt;</span> without leaking app CSS.</li>
+          <li><strong>Shadow DOM Isolation:</strong> Compile errors from <span class="inline-code notranslate" translate="no">oxc</span> or <span class="inline-code notranslate" translate="no">lightningcss</span> render inside <span class="inline-code notranslate" translate="no">&lt;zerho-error-overlay&gt;</span> without leaking app CSS.</li>
           <li><strong>Auto-Dismiss:</strong> Saving a valid fix clears the overlay automatically over WebSocket without a full page reload.</li>
         </ul>
       </section>
 
       <section id="css-assets">
         <h2>
-          <span class="material-symbols-outlined" aria-hidden="true">layers</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">layers</span>
           CSS Modules &amp; Static Asset Imports
         </h2>
         <p>
-          Files ending in <span class="inline-code">.module.css</span> are compiled by <span class="inline-code">lightningcss</span>
-          into scoped class maps. Static assets (SVG, PNG, WebP, fonts) resolve via <span class="inline-code">?import</span> in dev
-          and emit <span class="inline-code">blake3</span>-hashed filenames in production builds.
+          Files ending in <span class="inline-code notranslate" translate="no">.module.css</span> are compiled by <span class="inline-code notranslate" translate="no">lightningcss</span>
+          into scoped class maps. Static assets (SVG, PNG, WebP, fonts) resolve via <span class="inline-code notranslate" translate="no">?import</span> in dev
+          and emit <span class="inline-code notranslate" translate="no">blake3</span>-hashed filenames in production builds.
         </p>
         <div class="code-block">
           <div class="code-header">
             <span>src/Header.tsx</span>
             <button type="button" class="copy-btn" data-copy={cssAssetsSnippet} aria-label="Copy CSS Modules and asset example">
-              <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">content_copy</span>
               <span data-copy-label>Copy</span>
             </button>
           </div>
-          <pre><code set:text={cssAssetsSnippet} /></pre>
+          <pre class="notranslate" translate="no"><code set:text={cssAssetsSnippet} /></pre>
         </div>
       </section>
 
       <section id="env-proxy">
         <h2>
-          <span class="material-symbols-outlined" aria-hidden="true">shield</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">shield</span>
           .env &amp; [server.proxy]
         </h2>
         <p>
-          Environment variables loaded from <span class="inline-code">.env</span> are strictly filtered by
-          <span class="inline-code">project.env_prefix</span> (default: <span class="inline-code">ZERHO_</span>)
-          before compile-time injection via <span class="inline-code">DefinePlugin</span>.
+          Environment variables loaded from <span class="inline-code notranslate" translate="no">.env</span> are strictly filtered by
+          <span class="inline-code notranslate" translate="no">project.env_prefix</span> (default: <span class="inline-code notranslate" translate="no">ZERHO_</span>)
+          before compile-time injection via <span class="inline-code notranslate" translate="no">DefinePlugin</span>.
         </p>
         <div class="code-block">
           <div class="code-header">
             <span>.env &amp; client usage</span>
             <button type="button" class="copy-btn" data-copy={envSnippet} aria-label="Copy env example">
-              <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">content_copy</span>
               <span data-copy-label>Copy</span>
             </button>
           </div>
-          <pre><code set:text={envSnippet} /></pre>
+          <pre class="notranslate" translate="no"><code set:text={envSnippet} /></pre>
         </div>
         <p>
           To forward API requests during local development without CORS friction, map path prefixes under
-          <span class="inline-code">[server.proxy]</span> in <span class="inline-code">zerho.toml</span>
-          (for example <span class="inline-code">"/api" = "http://127.0.0.1:8080"</span>). Static files placed in
-          <span class="inline-code">public/</span> are served at the root URL in dev and copied verbatim into <span class="inline-code">dist/</span>.
+          <span class="inline-code notranslate" translate="no">[server.proxy]</span> in <span class="inline-code notranslate" translate="no">zerho.toml</span>
+          (for example <span class="inline-code notranslate" translate="no">"/api" = "http://127.0.0.1:8080"</span>). Static files placed in
+          <span class="inline-code notranslate" translate="no">public/</span> are served at the root URL in dev and copied verbatim into <span class="inline-code notranslate" translate="no">dist/</span>.
         </p>
       </section>
 
       <section id="wasm-wit">
         <h2>
-          <span class="material-symbols-outlined" aria-hidden="true">extension</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">extension</span>
           WASM Plugin WIT Contract (zerho:plugin@0.1.0)
         </h2>
         <p>
-          Third-party plugins execute inside a fuel-metered <span class="inline-code">wasmtime v29</span> sandbox
+          Third-party plugins execute inside a fuel-metered <span class="inline-code notranslate" translate="no">wasmtime v29</span> sandbox
           (default fuel budget: 1,000,000 instructions) rather than an unrestricted Node.js process. Inspect this
-          contract anytime via <span class="inline-code">zerho wit</span>:
+          contract anytime via <span class="inline-code notranslate" translate="no">zerho wit</span>:
         </p>
         <div class="code-block">
           <div class="code-header">
             <span>zerho-plugin.wit</span>
             <button type="button" class="copy-btn" data-copy={witContract} aria-label="Copy WIT contract">
-              <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">content_copy</span>
               <span data-copy-label>Copy</span>
             </button>
           </div>
-          <pre><code set:text={witContract} /></pre>
+          <pre class="notranslate" translate="no"><code set:text={witContract} /></pre>
         </div>
       </section>
     </article>

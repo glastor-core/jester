@@ -156,7 +156,7 @@ const crates = [
   <section class="hero">
     <div class="container">
       <div class="eyebrow">
-        <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
+        <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">bolt</span>
         <span>v0.9.0 · Web Workers &amp; .wasm · SSR Edge Target · WASM Plugin ABI · Zero Node.js</span>
       </div>
 
@@ -166,29 +166,29 @@ const crates = [
 
       <p class="hero-lead">
         <strong>zerho</strong> is a Zero-Node, 100% Rust dev server and production bundler built on
-        <span class="inline-code">oxc</span>, <span class="inline-code">lightningcss</span>,
-        <span class="inline-code">blake3</span>, and <span class="inline-code">wasmtime</span>.
+        <span class="inline-code notranslate" translate="no">oxc</span>, <span class="inline-code notranslate" translate="no">lightningcss</span>,
+        <span class="inline-code notranslate" translate="no">blake3</span>, and <span class="inline-code notranslate" translate="no">wasmtime</span>.
         Ship React, Preact, Solid, and TypeScript apps with sub-millisecond transforms and zero JS runtime overhead.
       </p>
 
       <div class="hero-actions">
         <a href="/docs#quick-start" class="btn btn-primary">
-          <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">rocket_launch</span>
           <span>Start in 5 Seconds</span>
         </a>
         <a href="/docs" class="btn btn-secondary">
-          <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">menu_book</span>
           <span>Read the Docs</span>
         </a>
       </div>
 
       <div class="cli-box" role="region" aria-label="Quick start command">
-        <div class="cli-code">
+        <div class="cli-code notranslate" translate="no">
           <span class="cli-prompt" aria-hidden="true">$</span>
           <code>{initCommand}</code>
         </div>
         <button type="button" class="copy-btn" data-copy={initCommand} aria-label="Copy quick start command">
-          <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">content_copy</span>
           <span data-copy-label>Copy</span>
         </button>
       </div>
@@ -258,13 +258,13 @@ const crates = [
     <div class="container">
       <div class="section-header">
         <span class="eyebrow">
-          <span class="material-symbols-outlined" aria-hidden="true">layers</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">layers</span>
           <span>Core Capabilities</span>
         </span>
         <h2>Everything modern web apps need, compiled to native code.</h2>
         <p>
-          No Babel, no PostCSS plugins, no Rollup glue, and no 400 MB <span class="inline-code">node_modules</span>
-          toolchain tax. Declarative <span class="inline-code">zerho.toml</span> configuration drives the entire pipeline.
+          No Babel, no PostCSS plugins, no Rollup glue, and no 400 MB <span class="inline-code notranslate" translate="no">node_modules</span>
+          toolchain tax. Declarative <span class="inline-code notranslate" translate="no">zerho.toml</span> configuration drives the entire pipeline.
         </p>
       </div>
 
@@ -279,7 +279,7 @@ const crates = [
             aria-selected={idx === 0 ? 'true' : 'false'}
             data-pillar-tab={p.id}
           >
-            <span class="material-symbols-outlined" aria-hidden="true">{p.icon}</span>
+            <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">{p.icon}</span>
             <span>{p.label}</span>
           </button>
         ))}
@@ -301,11 +301,11 @@ const crates = [
               <div class="code-header">
                 <span>{p.codeLabel}</span>
                 <button type="button" class="copy-btn" data-copy={p.code} aria-label={`Copy ${p.label} snippet`}>
-                  <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+                  <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">content_copy</span>
                   <span data-copy-label>Copy</span>
                 </button>
               </div>
-              <pre><code set:text={p.code} /></pre>
+              <pre class="notranslate" translate="no"><code set:text={p.code} /></pre>
             </div>
           </div>
 
@@ -313,7 +313,7 @@ const crates = [
             {p.items.map((item) => (
               <li class="pillar-item">
                 <span class="pillar-item-icon" aria-hidden="true">
-                  <span class="material-symbols-outlined">{item.icon}</span>
+                  <span class="material-symbols-outlined notranslate" translate="no">{item.icon}</span>
                 </span>
                 <div>
                   <h4>{item.title}</h4>
@@ -332,13 +332,13 @@ const crates = [
     <div class="container">
       <div class="section-header">
         <span class="eyebrow">
-          <span class="material-symbols-outlined" aria-hidden="true">speed</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">speed</span>
           <span>Real --release Benchmarks</span>
         </span>
         <h2>Measured on real builds, not synthetic micro-loops.</h2>
         <p>
-          Every number below includes exact hardware specs, cold vs. warm <span class="inline-code">redb</span> timings,
-          and a 1-command <span class="inline-code">zerho bench --json</span> harness so any developer can verify on their own machine.
+          Every number below includes exact hardware specs, cold vs. warm <span class="inline-code notranslate" translate="no">redb</span> timings,
+          and a 1-command <span class="inline-code notranslate" translate="no">zerho bench --json</span> harness so any developer can verify on their own machine.
         </p>
       </div>
 
@@ -419,13 +419,13 @@ const crates = [
       <!-- Compact Reference Hardware & Reproducibility Strip -->
       <div class="hw-strip">
         <div class="hw-meta">
-          <strong style="color:#fff;">Verified Reference Hardware</strong> (<span class="inline-code">benchmarks/results.json</span>) —
-          AMD Zen 3 (16 threads) · Windows 11 x86_64 · <span class="inline-code">rustc 1.96.1</span> ·
-          <span class="inline-code">zerho --release</span> (16.60 MB) ·
-          <span class="inline-code">scope_hoisting=true minify=true brotli=true sri=true</span>
+          <strong style="color:#fff;">Verified Reference Hardware</strong> (<span class="inline-code notranslate" translate="no">benchmarks/results.json</span>) —
+          AMD Zen 3 (16 threads) · Windows 11 x86_64 · <span class="inline-code notranslate" translate="no">rustc 1.96.1</span> ·
+          <span class="inline-code notranslate" translate="no">zerho --release</span> (16.60 MB) ·
+          <span class="inline-code notranslate" translate="no">scope_hoisting=true minify=true brotli=true sri=true</span>
         </div>
         <div class="cli-box" style="margin: 0; max-width: 100%;" role="region" aria-label="Reproduce benchmark command">
-          <div class="cli-code">
+          <div class="cli-code notranslate" translate="no">
             <span class="cli-prompt" aria-hidden="true">$</span>
             <code>cargo build --release -p zerho-cli &amp;&amp; ./target/release/zerho bench --synthetic 500 --iterations 5 --json</code>
           </div>
@@ -435,7 +435,7 @@ const crates = [
             data-copy="cargo build --release -p zerho-cli && ./target/release/zerho bench --synthetic 500 --iterations 5 --json"
             aria-label="Copy benchmark reproduction command"
           >
-            <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+            <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">content_copy</span>
             <span data-copy-label>Copy</span>
           </button>
         </div>
@@ -458,33 +458,33 @@ const crates = [
             </tr>
             <tr>
               <td>Configuration &amp; Migration</td>
-              <td class="col-zerho">Declarative <span class="inline-code">zerho.toml</span> + JSON Schema + <span class="inline-code">zerho migrate</span></td>
-              <td>Executable <span class="inline-code">vite.config.ts</span> evaluated in Node</td>
+              <td class="col-zerho">Declarative <span class="inline-code notranslate" translate="no">zerho.toml</span> + JSON Schema + <span class="inline-code notranslate" translate="no">zerho migrate</span></td>
+              <td>Executable <span class="inline-code notranslate" translate="no">vite.config.ts</span> evaluated in Node</td>
             </tr>
             <tr>
               <td>JS / TS / JSX &amp; CSS Engine</td>
-              <td class="col-zerho">100% in-process <span class="inline-code">oxc</span> (Fast Refresh, Minifier, Scope Hoisting) + <span class="inline-code">lightningcss</span> + WebP/SVG</td>
+              <td class="col-zerho">100% in-process <span class="inline-code notranslate" translate="no">oxc</span> (Fast Refresh, Minifier, Scope Hoisting) + <span class="inline-code notranslate" translate="no">lightningcss</span> + WebP/SVG</td>
               <td>N-API bridge between JS host &amp; Rust crates</td>
             </tr>
             <tr>
               <td>Persistent Transform Cache</td>
-              <td class="col-zerho">ACID <span class="inline-code">redb</span> B-tree + <span class="inline-code">blake3</span> + HTTP Remote Team Cache (0.0017 ms warm hits)</td>
+              <td class="col-zerho">ACID <span class="inline-code notranslate" translate="no">redb</span> B-tree + <span class="inline-code notranslate" translate="no">blake3</span> + HTTP Remote Team Cache (0.0017 ms warm hits)</td>
               <td>JS filesystem &amp; dep pre-bundle cache</td>
             </tr>
             <tr>
               <td>Web Platform &amp; Edge SSR</td>
-              <td class="col-zerho">Web Workers, <span class="inline-code">.wasm</span> streaming, MPA, Library Mode &amp; <span class="inline-code">--ssr</span> Edge bundles</td>
+              <td class="col-zerho">Web Workers, <span class="inline-code notranslate" translate="no">.wasm</span> streaming, MPA, Library Mode &amp; <span class="inline-code notranslate" translate="no">--ssr</span> Edge bundles</td>
               <td>Requires extra SSR/worker/library plugins &amp; Node config</td>
             </tr>
             <tr>
               <td>Plugin Isolation</td>
-              <td class="col-zerho">Fuel-metered <span class="inline-code">wasmtime</span> WASM (<span class="inline-code">zerho:plugin@0.1.0</span>) + UTF-8 string hooks</td>
+              <td class="col-zerho">Fuel-metered <span class="inline-code notranslate" translate="no">wasmtime</span> WASM (<span class="inline-code notranslate" translate="no">zerho:plugin@0.1.0</span>) + UTF-8 string hooks</td>
               <td>Full-privilege Node.js JS plugins</td>
             </tr>
             <tr>
               <td>DevTools &amp; Memory Safety</td>
-              <td class="col-zerho">Built-in <span class="inline-code">/__inspect</span> + Live Treemap, <span class="inline-code">dist/stats.html</span> &amp; <span class="inline-code">unsafe_code = "forbid"</span></td>
-              <td>External plugin (<span class="inline-code">vite-plugin-inspect</span>)</td>
+              <td class="col-zerho">Built-in <span class="inline-code notranslate" translate="no">/__inspect</span> + Live Treemap, <span class="inline-code notranslate" translate="no">dist/stats.html</span> &amp; <span class="inline-code notranslate" translate="no">unsafe_code = "forbid"</span></td>
+              <td>External plugin (<span class="inline-code notranslate" translate="no">vite-plugin-inspect</span>)</td>
             </tr>
           </tbody>
         </table>
@@ -497,14 +497,14 @@ const crates = [
     <div class="container arch-split">
       <div class="arch-sticky">
         <span class="eyebrow">
-          <span class="material-symbols-outlined" aria-hidden="true">hub</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">hub</span>
           <span>Modular Rust Workspace</span>
         </span>
         <h2>9 focused crates. 60/60 passing tests. Pedantic clean.</h2>
         <p>
           Every layer is cleanly decoupled in a Rust Edition 2024 workspace enforced with
-          <span class="inline-code">clippy::pedantic -D warnings</span> and
-          <span class="inline-code">unsafe_code = "forbid"</span>.
+          <span class="inline-code notranslate" translate="no">clippy::pedantic -D warnings</span> and
+          <span class="inline-code notranslate" translate="no">unsafe_code = "forbid"</span>.
         </p>
         <div class="arch-stats">
           <span class="arch-stat">Edition 2024</span>
@@ -517,7 +517,7 @@ const crates = [
         {crates.map((c) => (
           <li class="crate-row">
             <span class="crate-idx">{c.idx}</span>
-            <span class="crate-name">{c.name}</span>
+            <span class="crate-name notranslate" translate="no">{c.name}</span>
             <span class="crate-desc">{c.desc}</span>
           </li>
         ))}
@@ -531,10 +531,10 @@ const crates = [
       <div class="cta-banner">
         <div>
           <h2>Ready to drop Node.js from your build pipeline?</h2>
-          <p>Explore the full <span class="inline-code">zerho.toml</span> reference, CLI commands, HMR API, and WASM WIT contract.</p>
+          <p>Explore the full <span class="inline-code notranslate" translate="no">zerho.toml</span> reference, CLI commands, HMR API, and WASM WIT contract.</p>
         </div>
         <a href="/docs" class="btn btn-primary">
-          <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">menu_book</span>
           <span>Open Documentation</span>
         </a>
       </div>
