@@ -5,6 +5,14 @@ All notable changes to **zerho** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-11-24
+
+### Added
+- **Deep `node_modules` CJS ↔ ESM Pre-Bundler (`crates/zerho-transform/src/cjs.rs`):** AST `require("...")` collector and recursive multi-file CJS graph pre-bundler (`prebundle_cjs_graph_to_esm`) wired into both `zerho-server` (`/@zerho/deps`) and `zerho-bundler` with `redb` caching.
+- **CSS `@import` & `url(...)` Asset Rewriting (`crates/zerho-transform/src/css_assets.rs`):** Recursively inlines local `@import "./tokens.css"` rules and rewrites local `url(...)` fonts (`.woff2`) and images (`.svg`/`.png`/`.jpg`/`.webp`) to `blake3`-hashed `/assets/*` URLs with automatic SVG/WebP optimization.
+- **Multi-Page Apps (`[build.entries]`):** Supports multiple HTML/script entry points in `zerho.toml`, automatically deduplicating shared modules into `assets/shared-<hash>.js` with `<link rel="modulepreload">` injection per page.
+- **Vite Auto-Migrator (`zerho migrate [DIR] [--dry-run] [--force]`):** Non-destructively inspects `package.json`, `vite.config.{ts,mts,js,mjs}`, `index.html`, and `tsconfig.json` to generate `zerho.toml` + `zerho.schema.json`.
+
 ## [0.7.0] - 2026-11-23
 
 ### Added

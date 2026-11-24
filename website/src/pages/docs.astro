@@ -158,6 +158,7 @@ world zerho-plugin {
 
 const cliCommands = [
   { cmd: 'zerho init [DIR] --template <NAME>', desc: 'Scaffold a Zero-Node project (basic-ts | react-tsx).' },
+  { cmd: 'zerho migrate [DIR] [--dry-run] [--force]', desc: 'Inspect package.json, vite.config.*, index.html, and tsconfig.json to generate a ready-to-run zerho.toml.' },
   { cmd: 'zerho dev [--config PATH] [--port PORT]', desc: 'Start the axum + tokio dev server with WebSocket HMR, /@zerho/bundle, /@zerho/deps, and /__inspect UI.' },
   { cmd: 'zerho build [--config PATH] [--analyze]', desc: 'Parallel rayon build with Scope Hoisting, oxc_minifier, redb cache, Shared Chunks + modulepreload, Brotli .br, SRI/CSP, and optional dist/stats.html.' },
   { cmd: 'zerho check [--config PATH] [--strict]', desc: 'Audit the full module graph in milliseconds for broken imports, circular dependencies, missing .env vars, and leaked secrets.' },
@@ -169,7 +170,7 @@ const cliCommands = [
 ---
 
 <BaseLayout
-  title="Documentation — zerho v0.7.0"
+  title="Documentation — zerho v0.8.0"
   description="Complete documentation for zerho v0.7.0: Quick Start, zerho.toml configuration reference, CLI commands (dev, build --analyze --watch, check, preview, bench), React Fast Refresh, Library Mode, WebP optimization, and WASM WIT plugins."
 >
   <div class="container docs-layout">
@@ -190,7 +191,7 @@ const cliCommands = [
       <section id="quick-start">
         <div class="eyebrow" style="margin-bottom: 14px;">
           <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
-          <span>Documentation · v0.7.0</span>
+          <span>Documentation · v0.8.0</span>
         </div>
         <h1>zerho Documentation</h1>
         <p>

@@ -1,4 +1,6 @@
 pub mod barrel;
+pub mod cjs;
+pub mod css_assets;
 pub mod scope_hoist;
 pub mod svg;
 
@@ -24,6 +26,8 @@ use zerho_core::{ContentHash, Framework, ModuleKind, ZerhoError, ZerhoResult};
 use zerho_plugin::{PluginContext, PluginRegistry};
 
 pub use barrel::{BarrelExport, parse_pure_barrel, rewrite_barrel_imports};
+pub use cjs::{collect_cjs_requires, prebundle_cjs_graph_to_esm, rewrite_cjs_requires};
+pub use css_assets::{inline_css_imports, rewrite_css_urls};
 pub use scope_hoist::{HoistedModuleInput, try_scope_hoist_bundle};
 pub use svg::optimize_svg;
 

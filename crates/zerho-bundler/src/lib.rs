@@ -22,9 +22,9 @@ use zerho_resolver::{OxcResolver, Resolver};
 use zerho_transform::{
     HoistedModuleInput, ImportedSymbols, TransformInput, TransformPipeline,
     collect_dynamic_imports, collect_imported_symbols, encode_base64, finalize_js_bundle_with_map,
-    is_likely_commonjs, lower_esm_for_bundle, optimize_svg, parse_pure_barrel,
-    prune_unused_exports, rewrite_barrel_imports, rewrite_dynamic_imports,
-    serialize_css_exports_json, try_scope_hoist_bundle, wrap_cjs_as_esm,
+    inline_css_imports, is_likely_commonjs, lower_esm_for_bundle, optimize_svg, parse_pure_barrel,
+    prebundle_cjs_graph_to_esm, prune_unused_exports, rewrite_barrel_imports, rewrite_css_urls,
+    rewrite_dynamic_imports, serialize_css_exports_json, try_scope_hoist_bundle, wrap_cjs_as_esm,
 };
 
 /// Emitted production chunk metadata (including gzip/brotli sizes and optional SHA-384 SRI digest).
@@ -74,7 +74,7 @@ struct LoadedNode {
     dep_ids: Vec<ModuleId>,
     dynamic_deps: Vec<PathBuf>,
     imported_symbols: Vec<(PathBuf, ImportedSymbols)>,
-    asset_chunk: Option<Chunk>,
+    asset_chunks: Vec<Chunk>,
     barrel_bypassed: usize,
 }
 
@@ -169,6 +169,10 @@ impl Bundler {
 
         if let Some(lib_entry) = self.config.build.lib.entry.clone() {
             return self.build_library(&lib_entry);
+        }
+
+        if !self.config.build.entries.is_empty() {
+            return self.build_mpa();
         }
 
         let entry_path = self.root.join(&self.config.project.entry);
@@ -640,9 +644,7 @@ impl Bundler {
             let mut next_frontier = Vec::new();
             for node in batch {
                 total_barrel_bypassed += node.barrel_bypassed;
-                if let Some(chunk) = node.asset_chunk {
-                    asset_chunks.push(chunk);
-                }
+                asset_chunks.extend(node.asset_chunks);
                 if let Some(hash) = node.hash {
                     let mod_id = ModuleId::from_specifier(&node.canonical.to_string_lossy());
                     self.graph.upsert_module(
@@ -692,7 +694,7 @@ impl Bundler {
                 dep_ids: Vec::new(),
                 dynamic_deps: Vec::new(),
                 imported_symbols: Vec::new(),
-                asset_chunk: Some(chunk),
+                asset_chunks: vec![chunk],
                 barrel_bypassed: 0,
             });
         }
@@ -702,9 +704,42 @@ impl Bundler {
             reason: err.to_string(),
         })?;
 
-        // Automatic CJS -> ESM pre-bundling for CommonJS dependencies.
+        let mut extra_asset_chunks = Vec::new();
+
+        // Deep CJS -> ESM pre-bundling (resolving nested require()) and CSS @import + url(...) rewriting.
         let source = if kind == ModuleKind::Js && is_likely_commonjs(&raw_source) {
-            wrap_cjs_as_esm(&raw_source)
+            prebundle_cjs_graph_to_esm(canonical, &raw_source, |spec, importer| {
+                let dep = self.resolver.resolve(spec, Some(importer)).ok()?;
+                if dep.is_virtual {
+                    return None;
+                }
+                let dep_canon = dep.path.canonicalize().unwrap_or(dep.path);
+                let src = fs::read_to_string(&dep_canon).ok()?;
+                Some((dep_canon, src))
+            })
+            .unwrap_or_else(|_| wrap_cjs_as_esm(&raw_source))
+        } else if kind == ModuleKind::Css {
+            let inlined = inline_css_imports(&raw_source, canonical, |spec, importer| {
+                let dep = self.resolver.resolve(spec, Some(importer)).ok()?;
+                if dep.is_virtual {
+                    return None;
+                }
+                let dep_canon = dep.path.canonicalize().unwrap_or(dep.path);
+                let css = fs::read_to_string(&dep_canon).ok()?;
+                Some((dep_canon, css))
+            });
+            rewrite_css_urls(&inlined, |url_ref| {
+                let clean_ref = url_ref.split(['?', '#']).next().unwrap_or(url_ref);
+                let target_path = if let Some(stripped) = clean_ref.strip_prefix('/') {
+                    self.root.join(stripped)
+                } else {
+                    canonical.parent()?.join(clean_ref)
+                };
+                let target_canon = target_path.canonicalize().ok()?;
+                let (asset_mod, asset_chunk) = self.emit_imported_asset(&target_canon, out_dir).ok()?;
+                extra_asset_chunks.push(asset_chunk);
+                asset_mod.emitted_asset_url
+            })
         } else {
             raw_source
         };
@@ -866,7 +901,7 @@ impl Bundler {
             dep_ids,
             dynamic_deps,
             imported_symbols,
-            asset_chunk: None,
+            asset_chunks: extra_asset_chunks,
             barrel_bypassed,
         })
     }
@@ -932,6 +967,186 @@ impl Bundler {
             resolved_imports: BTreeMap::new(),
         };
         Ok((module, chunk))
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn build_mpa(&mut self) -> ZerhoResult<BundleOutput> {
+        let out_dir = if self.config.build.out_dir.is_absolute() {
+            self.config.build.out_dir.clone()
+        } else {
+            self.root.join(&self.config.build.out_dir)
+        };
+        fs::create_dir_all(out_dir.join("assets")).map_err(|err| ZerhoError::Io {
+            path: Some(out_dir.join("assets")),
+            reason: err.to_string(),
+        })?;
+
+        let entries: Vec<(String, PathBuf)> = self
+            .config
+            .build
+            .entries
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+
+        let mut pending: Vec<(String, PathBuf, PathBuf, Vec<CollectedModule>)> = Vec::new();
+        let mut chunks = Vec::new();
+        let mut total_shaken = 0usize;
+        let mut total_barrels = 0usize;
+        let mut unique_modules = HashSet::new();
+
+        for (name, rel_entry) in entries {
+            let entry_path = self.root.join(&rel_entry);
+            let entry_canon = entry_path.canonicalize().map_err(|err| ZerhoError::Io {
+                path: Some(entry_path),
+                reason: format!("MPA entry `{name}` not found: {err}"),
+            })?;
+
+            let mut collected = Vec::new();
+            let mut dynamic_targets = Vec::new();
+            let mut usage_map = HashMap::new();
+            let mut asset_chunks = Vec::new();
+            usage_map.insert(entry_canon.clone(), ImportedSymbols::All);
+
+            total_barrels += self.collect_module_graph(
+                &entry_canon,
+                &out_dir,
+                &mut collected,
+                &mut dynamic_targets,
+                &mut usage_map,
+                &mut asset_chunks,
+            )?;
+            total_shaken += shake_modules(&mut collected, &usage_map)?;
+            self.lower_esm_modules(&mut collected)?;
+            for m in &collected {
+                unique_modules.insert(m.id.clone());
+            }
+            chunks.extend(asset_chunks);
+            pending.push((name, rel_entry, entry_canon, collected));
+        }
+
+        // Deduplicate modules shared across >= 2 MPA entry points into `assets/shared-<hash>.js`.
+        let mut id_counts: HashMap<String, usize> = HashMap::new();
+        for (_, _, _, mods) in &pending {
+            let mut seen = HashSet::new();
+            for m in mods {
+                if (m.kind.is_script() || m.kind == ModuleKind::Json || m.css_exports.is_some())
+                    && seen.insert(m.id.clone())
+                {
+                    *id_counts.entry(m.id.clone()).or_insert(0) += 1;
+                }
+            }
+        }
+        let shared_ids: HashSet<String> = id_counts
+            .into_iter()
+            .filter_map(|(id, count)| (count >= 2).then_some(id))
+            .collect();
+
+        let mut preload_chunks = Vec::new();
+        let shared_url = if shared_ids.is_empty() {
+            None
+        } else {
+            let mut shared_mods = Vec::new();
+            let mut seen = HashSet::new();
+            for (_, _, _, mods) in &pending {
+                for m in mods {
+                    if shared_ids.contains(&m.id) && seen.insert(m.id.clone()) {
+                        shared_mods.push(m.clone());
+                    }
+                }
+            }
+            let raw_shared = assemble_shared_esm_chunk(&shared_mods);
+            let emitted = self.emit_js_chunk(&out_dir, "shared", &raw_shared)?;
+            let url = format!("/{}", emitted.file_name);
+            preload_chunks.push((emitted.file_name.clone(), emitted.integrity.clone()));
+            chunks.push(emitted);
+            Some(url)
+        };
+
+        let mut manifest_entries = Vec::new();
+        for (name, rel_entry, entry_canon, mut mods) in pending {
+            let uses_shared =
+                shared_url.is_some() && mods.iter().any(|m| shared_ids.contains(&m.id));
+            if uses_shared {
+                mods.retain(|m| !shared_ids.contains(&m.id));
+            }
+            let entry_id = self.module_key(&entry_canon);
+            let raw_js = if uses_shared {
+                assemble_async_esm_chunk(&mods, &entry_id, shared_url.as_deref())
+            } else {
+                assemble_js_bundle(&mods, &entry_id)
+            };
+            let js_chunk = self.emit_js_chunk(&out_dir, &name, &raw_js)?;
+            let css_emit = emit_css_bundle(
+                &out_dir,
+                &mods,
+                self.config.security.sri,
+                self.config.build.brotli,
+                &mut chunks,
+            )?;
+
+            let html_name = format!("{name}.html");
+            let src_html = self.root.join(&html_name);
+            let base_html = if src_html.is_file() {
+                fs::read_to_string(&src_html).map_err(|err| ZerhoError::Io {
+                    path: Some(src_html),
+                    reason: err.to_string(),
+                })?
+            } else {
+                format!(
+                    "<!doctype html><html><head><meta charset=\"utf-8\" /><title>{name}</title></head><body><div id=\"app\"></div><script type=\"module\" src=\"/{}\"></script></body></html>\n",
+                    rel_entry.to_string_lossy().replace('\\', "/")
+                )
+            };
+            let prod_html = rewrite_html_for_production(
+                &base_html,
+                &rel_entry,
+                &js_chunk.file_name,
+                js_chunk.integrity.as_deref(),
+                css_emit.as_ref().map(|(f, _)| f.as_str()),
+                css_emit.as_ref().and_then(|(_, sri)| sri.as_deref()),
+                if uses_shared { &preload_chunks } else { &[] },
+            );
+            let out_html = out_dir.join(&html_name);
+            fs::write(&out_html, prod_html).map_err(|err| ZerhoError::Io {
+                path: Some(out_html),
+                reason: err.to_string(),
+            })?;
+
+            manifest_entries.push(format!("  \"{name}\": \"{}\"", js_chunk.file_name));
+            chunks.push(js_chunk);
+        }
+
+        enforce_budgets(&chunks, &self.config.build.budgets)?;
+        if self.config.security.csp {
+            let csp_path = out_dir.join("csp.json");
+            fs::write(&csp_path, build_csp_manifest(&chunks)).map_err(|err| ZerhoError::Io {
+                path: Some(csp_path),
+                reason: err.to_string(),
+            })?;
+        }
+        let manifest = format!(
+            "{{\n  \"mode\": \"mpa\",\n  \"entries\": {{\n{}\n  }}\n}}\n",
+            manifest_entries.join(",\n")
+        );
+        let manifest_path = out_dir.join("manifest.json");
+        fs::write(&manifest_path, manifest).map_err(|err| ZerhoError::Io {
+            path: Some(manifest_path),
+            reason: err.to_string(),
+        })?;
+
+        let cache_stats = self.cache.stats();
+        Ok(BundleOutput {
+            out_dir,
+            chunks,
+            module_count: unique_modules.len(),
+            tree_shaken_exports: total_shaken,
+            barrel_imports_bypassed: total_barrels,
+            cache_hits: cache_stats.hits,
+            cache_misses: cache_stats.misses,
+            scope_hoisted: false,
+            stats_file: None,
+        })
     }
 
     fn build_library(&mut self, lib_entry: &Path) -> ZerhoResult<BundleOutput> {
@@ -1776,6 +1991,112 @@ mod tests {
         let mut bad_cfg = cfg;
         bad_cfg.plugins.wasm = vec![PathBuf::from("plugins/bad.wasm")];
         assert!(Bundler::new(bad_cfg).build().is_err());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn inlines_css_imports_and_hashes_css_url_assets() {
+        let dir = std::env::temp_dir().join("zerho-bundler-css-import-url-test");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("src")).expect("create src");
+
+        fs::write(dir.join("src/tokens.css"), ":root { --accent: #f97316; }\n")
+            .expect("write tokens.css");
+        fs::write(
+            dir.join("src/bg.svg"),
+            "<!-- comment --><svg xmlns=\"http://www.w3.org/2000/svg\"></svg>",
+        )
+        .expect("write bg.svg");
+        fs::write(dir.join("src/font.woff2"), b"WOFF2_FAKE_FONT_BYTES")
+            .expect("write font.woff2");
+        fs::write(
+            dir.join("src/styles.css"),
+            "@import \"./tokens.css\";\n\
+             @font-face { font-family: 'RH'; src: url('./font.woff2') format('woff2'); }\n\
+             body { color: var(--accent); background: url('./bg.svg'); }\n",
+        )
+        .expect("write styles.css");
+        fs::write(
+            dir.join("src/main.ts"),
+            "import './styles.css';\nconsole.log('styled');\n",
+        )
+        .expect("write main.ts");
+
+        let mut cfg = ZerhoConfig::default();
+        cfg.project.root = dir.clone();
+        cfg.project.entry = PathBuf::from("src/main.ts");
+
+        let out = Bundler::new(cfg).build().expect("css asset build should succeed");
+        let css_chunk = out
+            .chunks
+            .iter()
+            .find(|c| {
+                Path::new(&c.file_name)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("css"))
+            })
+            .expect("css bundle should be emitted");
+        let css_out = fs::read_to_string(out.out_dir.join(&css_chunk.file_name))
+            .expect("read emitted css");
+        assert!(css_out.contains("--accent:#f97316") || css_out.contains("--accent: #f97316"));
+        assert!(css_out.contains("/assets/font-"));
+        assert!(css_out.contains("/assets/bg-"));
+        assert!(!css_out.contains("@import"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn builds_multi_page_app_with_shared_chunk_deduplication() {
+        let dir = std::env::temp_dir().join("zerho-bundler-mpa-test");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("src")).expect("create src");
+
+        fs::write(
+            dir.join("src/common.ts"),
+            "export const BRAND_MARKER = 'ZERHO_MPA_SHARED_MARKER';\n",
+        )
+        .expect("write common.ts");
+        fs::write(
+            dir.join("src/index.ts"),
+            "import { BRAND_MARKER } from './common';\nconsole.log('home', BRAND_MARKER);\n",
+        )
+        .expect("write index.ts");
+        fs::write(
+            dir.join("src/admin.ts"),
+            "import { BRAND_MARKER } from './common';\nconsole.log('admin', BRAND_MARKER);\n",
+        )
+        .expect("write admin.ts");
+
+        let mut cfg = ZerhoConfig::default();
+        cfg.project.root = dir.clone();
+        cfg.build.minify = false;
+        cfg.build
+            .entries
+            .insert("index".to_owned(), PathBuf::from("src/index.ts"));
+        cfg.build
+            .entries
+            .insert("admin".to_owned(), PathBuf::from("src/admin.ts"));
+
+        let out = Bundler::new(cfg).build().expect("MPA build should succeed");
+        assert!(out.out_dir.join("index.html").is_file());
+        assert!(out.out_dir.join("admin.html").is_file());
+        let shared = out
+            .chunks
+            .iter()
+            .find(|c| c.file_name.starts_with("assets/shared-"))
+            .expect("MPA should extract shared chunk");
+        let shared_js = fs::read_to_string(out.out_dir.join(&shared.file_name))
+            .expect("read shared chunk");
+        assert!(shared_js.contains("ZERHO_MPA_SHARED_MARKER"));
+
+        let admin_html =
+            fs::read_to_string(out.out_dir.join("admin.html")).expect("read admin.html");
+        assert!(admin_html.contains(&format!(
+            "<link rel=\"modulepreload\" href=\"/{}\"",
+            shared.file_name
+        )));
 
         let _ = fs::remove_dir_all(&dir);
     }

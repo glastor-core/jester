@@ -1,4 +1,5 @@
 mod bench;
+mod migrate;
 mod scaffold;
 
 use std::env;
@@ -7,6 +8,7 @@ use std::process::ExitCode;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use bench::execute_bench;
+use migrate::migrate_from_vite;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use scaffold::{Template, scaffold_project};
 use zerho_bundler::{Bundler, run_project_check};
@@ -52,6 +54,7 @@ async fn run(args: &[String]) -> ZerhoResult<()> {
             Ok(())
         }
         "init" => cmd_init(&args[1..]),
+        "migrate" => cmd_migrate(&args[1..]),
         "dev" => cmd_dev(&args[1..]).await,
         "build" => cmd_build(&args[1..]),
         "check" => cmd_check(&args[1..]),
@@ -82,6 +85,33 @@ fn cmd_init(flags: &[String]) -> ZerhoResult<()> {
         println!("  cd {}", target_dir.display());
     }
     println!("  zerho dev");
+    Ok(())
+}
+
+fn cmd_migrate(flags: &[String]) -> ZerhoResult<()> {
+    let target_dir = find_positional_arg(flags).map_or_else(|| PathBuf::from("."), PathBuf::from);
+    let dry_run = flags.iter().any(|f| f == "--dry-run");
+    let force = flags.iter().any(|f| f == "--force");
+
+    let summary = migrate_from_vite(&target_dir, dry_run, force)?;
+    if dry_run {
+        println!(
+            "# zerho migrate --dry-run (detected: {})\n{}",
+            summary.detected_files.join(", "),
+            summary.generated_toml
+        );
+    } else {
+        println!(
+            "zerho migrate complete (detected: {}, wrote {} file(s)) -> {}",
+            summary.detected_files.join(", "),
+            summary.written_files.len(),
+            target_dir.display()
+        );
+        for f in &summary.written_files {
+            println!("  + {}", f.display());
+        }
+        println!("  Next: run `zerho check` or `zerho dev`");
+    }
     Ok(())
 }
 
@@ -348,7 +378,8 @@ fn print_help() {
            check     Audit module graph for broken imports, cycles, missing .env, and secrets\n\
            preview   Preview the production build locally (serves pre-compressed .br)\n\
            bench     Run reproducible transform, cache, and build benchmarks\n\
-           init [DIR]  Scaffold a Zero-Node project (--template basic-ts | react-tsx)\n\
+           init [DIR]    Scaffold a Zero-Node project (--template basic-ts | react-tsx)\n\
+           migrate [DIR] Migrate an existing Vite project to zerho.toml (--dry-run | --force)\n\
            schema      Print the JSON Schema for zerho.toml\n\
            wit         Print the WASM Component Model plugin contract (zerho:plugin@0.1.0)\n\
            help        Show this help message\n\n\

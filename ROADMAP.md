@@ -1,6 +1,6 @@
 # zerho Roadmap
 
-> **Current verified baseline:** `v0.7.0` — 16.60 MB single native Rust binary (`unsafe_code = "forbid"`), **51/51 tests passing**, **100/100 Vektor repo hygiene**, `0.0017 ms` warm `redb` cache hits, `763.53 ms` warm build on 500 TypeScript modules (`benchmarks/results.json`).
+> **Current verified baseline:** `v0.8.0` — 100% Safe Rust (`unsafe_code = "forbid"`), **56/56 tests passing**, **100/100 Vektor repo hygiene**, deep CJS↔ESM pre-bundler, CSS `@import`/`url(...)` asset rewriting, Multi-Page Apps (`[build.entries]`), and `zerho migrate` from Vite.
 
 ---
 
@@ -14,12 +14,12 @@
 
 ---
 
-## `v0.8.0` — Real-World npm Ecosystem & Large App Parity
+## `v0.8.0` — Real-World npm Ecosystem & Large App Parity *(Completed)*
 
-- [ ] **Deep `node_modules` CJS ↔ ESM Pre-Bundler:** Handle multi-file CommonJS packages (`react-dom/client`, `zustand`, `lucide-react`, `date-fns`) with nested `require()` resolution cached in `redb`.
-- [ ] **CSS `@import` & `url(...)` Asset Rewriting:** Resolve `@import "./tokens.css"`, `.woff2` fonts, and CSS background images with `blake3` hashing and automatic SVG/WebP optimization.
-- [ ] **Multi-Page Apps (MPA):** Support multiple HTML/script entry points in `zerho.toml` (`[build.entries]`) with automatic shared chunk deduplication.
-- [ ] **Vite Auto-Migrator (`zerho migrate`):** Inspect `vite.config.*`, `package.json`, and `tsconfig.json` to generate a ready-to-run `zerho.toml` in seconds.
+- [x] **Deep `node_modules` CJS ↔ ESM Pre-Bundler:** Handle multi-file CommonJS packages (`react-dom/client`, `zustand`, `lucide-react`, `date-fns`) with nested `require()` resolution cached in `redb`.
+- [x] **CSS `@import` & `url(...)` Asset Rewriting:** Resolve `@import "./tokens.css"`, `.woff2` fonts, and CSS background images with `blake3` hashing and automatic SVG/WebP optimization.
+- [x] **Multi-Page Apps (MPA):** Support multiple HTML/script entry points in `zerho.toml` (`[build.entries]`) with automatic shared chunk deduplication.
+- [x] **Vite Auto-Migrator (`zerho migrate`):** Inspect `vite.config.*`, `package.json`, and `tsconfig.json` to generate a ready-to-run `zerho.toml` in seconds.
 
 ---
 

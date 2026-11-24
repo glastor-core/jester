@@ -194,6 +194,8 @@ pub struct BuildConfig {
     pub analyze: bool,
     pub budgets: BudgetsConfig,
     pub lib: LibConfig,
+    /// Optional Multi-Page App (MPA) entry map: `"index" -> "src/main.ts"`, `"admin" -> "src/admin.ts"`.
+    pub entries: BTreeMap<String, PathBuf>,
 }
 
 impl Default for BuildConfig {
@@ -209,6 +211,7 @@ impl Default for BuildConfig {
             analyze: false,
             budgets: BudgetsConfig::default(),
             lib: LibConfig::default(),
+            entries: BTreeMap::new(),
         }
     }
 }
@@ -287,6 +290,13 @@ impl ZerhoConfig {
                 let prefix = unquote_key(key);
                 let target = parse_string(value, line_no)?;
                 config.server.proxy.insert(prefix, target);
+                continue;
+            }
+
+            if section == "build.entries" {
+                let entry_name = unquote_key(key);
+                let entry_path = PathBuf::from(parse_string(value, line_no)?);
+                config.build.entries.insert(entry_name, entry_path);
                 continue;
             }
 
@@ -530,6 +540,10 @@ impl ZerhoConfig {
               "default": ["es", "cjs"]
             }
           }
+        },
+        "entries": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
         }
       }
     },

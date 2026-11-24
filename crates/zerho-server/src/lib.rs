@@ -17,8 +17,9 @@ use zerho_graph::{CachedArtifact, DiskCache, ModuleGraph};
 use zerho_plugin::{PluginRegistry, register_wasm_plugins};
 use zerho_resolver::{OxcResolver, Resolver};
 use zerho_transform::{
-    TransformInput, TransformPipeline, is_likely_commonjs, lower_esm_for_bundle, rewrite_imports,
-    wrap_cjs_as_esm, wrap_css_as_hmr_module, wrap_css_with_exports_as_hmr_module,
+    TransformInput, TransformPipeline, is_likely_commonjs, lower_esm_for_bundle,
+    prebundle_cjs_graph_to_esm, rewrite_imports, wrap_cjs_as_esm, wrap_css_as_hmr_module,
+    wrap_css_with_exports_as_hmr_module,
 };
 
 const INSPECT_HTML: &str = include_str!("inspect.html");
@@ -656,9 +657,22 @@ async fn serve_dep(
         return (StatusCode::NOT_FOUND, "dependency file not found").into_response();
     };
 
-    // Automatic CJS -> ESM pre-bundling for CommonJS npm dependencies.
+    // Automatic deep CJS -> ESM pre-bundling (resolving nested require() calls, cached in redb).
     let source = if resolved.kind == ModuleKind::Js && is_likely_commonjs(&raw_source) {
-        wrap_cjs_as_esm(&raw_source)
+        let entry_canon = resolved
+            .path
+            .canonicalize()
+            .unwrap_or_else(|_| resolved.path.clone());
+        prebundle_cjs_graph_to_esm(&entry_canon, &raw_source, |spec, importer| {
+            let dep = state.resolver.resolve(spec, Some(importer)).ok()?;
+            if dep.is_virtual {
+                return None;
+            }
+            let dep_canon = dep.path.canonicalize().unwrap_or(dep.path);
+            let src = std::fs::read_to_string(&dep_canon).ok()?;
+            Some((dep_canon, src))
+        })
+        .unwrap_or_else(|_| wrap_cjs_as_esm(&raw_source))
     } else {
         raw_source
     };
