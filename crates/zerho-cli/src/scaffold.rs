@@ -545,7 +545,7 @@ mod tests {
             let _ = fs::remove_dir_all(&dir);
 
             let files = scaffold_project(&dir, tpl).expect("scaffold should succeed");
-            assert!(!files.is_empty());
+            assert_ne!(files.len(), 0);
 
             let mut cfg = ZerhoConfig::load(&dir.join("zerho.toml")).expect("config should load");
             cfg.project.root = dir.clone();
