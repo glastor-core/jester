@@ -5,6 +5,14 @@ All notable changes to **zerho** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-11-24
+
+### Added
+- **Web Workers & `.wasm` Imports (`crates/zerho-transform/src/workers.rs`, `zerho-bundler`):** Detects `new Worker(new URL('./worker.ts', import.meta.url))` via `oxc` AST, emits dedicated `assets/worker-<hash>.js` chunks, and generates `WebAssembly.instantiateStreaming(fetch(...))` default loaders for imported `.wasm` modules.
+- **Full String-Passing WASM Plugin ABI + Example Plugin (`crates/zerho-plugin/src/wasm.rs`, `examples/wasm-plugin/`):** Passes/returns UTF-8 strings across `wasmtime` linear memory (`zerho_alloc`, `zerho_resolve_id`, `zerho_load`, `zerho_transform`) inside a fuel-capped sandbox, accompanied by a standalone Rust → `wasm32-unknown-unknown` plugin example.
+- **SSR Build Target (`zerho build --ssr` / `build.ssr = true`):** Emits DOM-free Edge/Server ESM bundles (`dist/server.mjs`) with `import.meta.env.SSR = true` targeting Cloudflare Workers, Deno, Node.js, and Bun.
+- **Live Bundle Treemap in `/__inspect` (`crates/zerho-server/src/inspect.html`):** Exposes per-module byte sizes in `/__inspect/api` and renders an interactive filterable Treemap directly inside the dev server DevTools UI.
+
 ## [0.8.0] - 2026-11-24
 
 ### Added

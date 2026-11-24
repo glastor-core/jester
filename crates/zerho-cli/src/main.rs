@@ -131,6 +131,9 @@ fn cmd_build(flags: &[String]) -> ZerhoResult<()> {
     if flags.iter().any(|f| f == "--analyze") {
         config.build.analyze = true;
     }
+    if flags.iter().any(|f| f == "--ssr") {
+        config.build.ssr = true;
+    }
     let watch = flags.iter().any(|f| f == "--watch");
     run_single_build(&config)?;
     if watch {
@@ -388,6 +391,7 @@ fn print_help() {
            --config <PATH>       Path to zerho.toml (default: ./zerho.toml)\n\
            --port <PORT>         Override dev/preview server port\n\
            --analyze             Emit interactive dist/stats.html Bundle Analyzer on build\n\
+           --ssr                 Emit DOM-free Edge/Server ESM bundle (dist/server.mjs)\n\
            --watch               Watch source files and rebuild incrementally on `zerho build`\n\
            --strict              Fail `zerho check` on warnings as well as errors\n\
            --iterations <N>      Number of iterations for `zerho bench` (default: 10)\n\

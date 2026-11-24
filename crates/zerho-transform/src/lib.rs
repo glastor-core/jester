@@ -3,6 +3,7 @@ pub mod cjs;
 pub mod css_assets;
 pub mod scope_hoist;
 pub mod svg;
+pub mod workers;
 
 use lightningcss::css_modules::Config as CssModulesConfig;
 use lightningcss::stylesheet::{MinifyOptions, ParserOptions, PrinterOptions, StyleSheet};
@@ -30,6 +31,7 @@ pub use cjs::{collect_cjs_requires, prebundle_cjs_graph_to_esm, rewrite_cjs_requ
 pub use css_assets::{inline_css_imports, rewrite_css_urls};
 pub use scope_hoist::{HoistedModuleInput, try_scope_hoist_bundle};
 pub use svg::optimize_svg;
+pub use workers::{collect_web_worker_urls, rewrite_web_worker_urls};
 
 /// Input to the native transform pipeline.
 #[derive(Debug, Clone)]

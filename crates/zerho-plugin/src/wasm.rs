@@ -149,6 +149,93 @@ impl WasmPluginHost {
             reason: format!("wasm execution trapped: {err}"),
         })
     }
+
+    /// Passes a UTF-8 string into guest linear memory via `zerho_alloc(len) -> ptr`, invokes
+    /// `<hook_name>(ptr, len) -> i64` (returning packed `(out_ptr << 32) | out_len`), and reads
+    /// back the transformed UTF-8 string inside a fuel-capped sandbox.
+    ///
+    /// Returns `Ok(None)` if the guest does not export `memory`/`zerho_alloc`/`<hook_name>` or returns `0`.
+    pub fn call_string_hook(
+        &self,
+        plugin: &CompiledWasmPlugin,
+        hook_name: &str,
+        input: &str,
+    ) -> ZerhoResult<Option<String>> {
+        let mut store = Store::new(&self.engine, ());
+        store
+            .set_fuel(self.fuel_limit)
+            .map_err(|err| ZerhoError::Plugin {
+                plugin: plugin.descriptor.name.clone(),
+                reason: err.to_string(),
+            })?;
+
+        let instance =
+            Instance::new(&mut store, &plugin.module, &[]).map_err(|err| ZerhoError::Plugin {
+                plugin: plugin.descriptor.name.clone(),
+                reason: format!("wasm instantiation failed: {err}"),
+            })?;
+
+        let Some(memory) = instance.get_memory(&mut store, "memory") else {
+            return Ok(None);
+        };
+        let Ok(alloc_fn) = instance.get_typed_func::<i32, i32>(&mut store, "zerho_alloc") else {
+            return Ok(None);
+        };
+        let Ok(hook_fn) = instance.get_typed_func::<(i32, i32), i64>(&mut store, hook_name) else {
+            return Ok(None);
+        };
+
+        let in_bytes = input.as_bytes();
+        let in_len = i32::try_from(in_bytes.len()).map_err(|_| ZerhoError::Plugin {
+            plugin: plugin.descriptor.name.clone(),
+            reason: "input exceeds i32 length for WASM linear memory".to_owned(),
+        })?;
+        let in_ptr = alloc_fn.call(&mut store, in_len).map_err(|err| ZerhoError::Plugin {
+            plugin: plugin.descriptor.name.clone(),
+            reason: format!("zerho_alloc trapped: {err}"),
+        })?;
+        let in_offset = usize::try_from(in_ptr).map_err(|_| ZerhoError::Plugin {
+            plugin: plugin.descriptor.name.clone(),
+            reason: "zerho_alloc returned negative pointer".to_owned(),
+        })?;
+        memory
+            .write(&mut store, in_offset, in_bytes)
+            .map_err(|err| ZerhoError::Plugin {
+                plugin: plugin.descriptor.name.clone(),
+                reason: format!("wasm memory write failed: {err}"),
+            })?;
+
+        let packed = hook_fn
+            .call(&mut store, (in_ptr, in_len))
+            .map_err(|err| ZerhoError::Plugin {
+                plugin: plugin.descriptor.name.clone(),
+                reason: format!("`{hook_name}` trapped: {err}"),
+            })?;
+        if packed == 0 {
+            return Ok(None);
+        }
+
+        let packed_u64 = packed.cast_unsigned();
+        let out_ptr = usize::try_from(packed_u64 >> 32).unwrap_or(0);
+        let out_len = usize::try_from(packed_u64 & 0xFFFF_FFFF).unwrap_or(0);
+        if out_len == 0 {
+            return Ok(None);
+        }
+
+        let mut out_buf = vec![0u8; out_len];
+        memory
+            .read(&store, out_ptr, &mut out_buf)
+            .map_err(|err| ZerhoError::Plugin {
+                plugin: plugin.descriptor.name.clone(),
+                reason: format!("wasm memory read failed: {err}"),
+            })?;
+
+        let decoded = String::from_utf8(out_buf).map_err(|err| ZerhoError::Plugin {
+            plugin: plugin.descriptor.name.clone(),
+            reason: format!("`{hook_name}` returned invalid UTF-8: {err}"),
+        })?;
+        Ok(Some(decoded))
+    }
 }
 
 /// A compiled, ready-to-instantiate WebAssembly plugin module.
@@ -185,16 +272,33 @@ impl Plugin for WasmPluginAdapter {
         &self.compiled.descriptor.name
     }
 
+    fn resolve_id(&self, specifier: &str, _importer: Option<&Path>) -> ZerhoResult<Option<String>> {
+        self.host
+            .call_string_hook(&self.compiled, "zerho_resolve_id", specifier)
+    }
+
+    fn load(&self, id: &str, _ctx: &PluginContext) -> ZerhoResult<Option<String>> {
+        self.host
+            .call_string_hook(&self.compiled, "zerho_load", id)
+    }
+
     fn transform(
         &self,
-        _code: &str,
+        code: &str,
         _id: &str,
         _kind: ModuleKind,
         _ctx: &PluginContext,
     ) -> ZerhoResult<Option<PluginTransformResult>> {
-        // Execute optional `zerho_on_transform` hook inside the fuel-metered sandbox.
-        let _ = self.host.call_i32_export(&self.compiled, "zerho_on_transform");
-        Ok(None)
+        let Some(transformed) =
+            self.host
+                .call_string_hook(&self.compiled, "zerho_transform", code)?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(PluginTransformResult {
+            code: transformed,
+            sourcemap: None,
+        }))
     }
 }
 
@@ -271,5 +375,45 @@ mod tests {
     fn embeds_wit_contract() {
         assert!(wit_contract().contains("package zerho:plugin@0.1.0;"));
         assert!(wit_contract().contains("world zerho-plugin"));
+    }
+
+    #[test]
+    fn passes_and_returns_utf8_string_across_wasm_linear_memory() {
+        #[rustfmt::skip]
+        const STRING_TRANSFORM_WASM: &[u8] = &[
+            0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+            // Type section: (i32)->i32 and (i32, i32)->i64 (12 = 0x0c bytes)
+            0x01, 0x0c, 0x02,
+            0x60, 0x01, 0x7f, 0x01, 0x7f,
+            0x60, 0x02, 0x7f, 0x7f, 0x01, 0x7e,
+            // Function section
+            0x03, 0x03, 0x02, 0x00, 0x01,
+            // Memory section (1 page)
+            0x05, 0x03, 0x01, 0x00, 0x01,
+            // Export section (42 = 0x2a bytes)
+            0x07, 0x2a, 0x03,
+            0x06, b'm', b'e', b'm', b'o', b'r', b'y', 0x02, 0x00,
+            0x0b, b'z', b'e', b'r', b'h', b'o', b'_', b'a', b'l', b'l', b'o', b'c', 0x00, 0x00,
+            0x0f, b'z', b'e', b'r', b'h', b'o', b'_', b't', b'r', b'a', b'n', b's', b'f', b'o', b'r', b'm', 0x00, 0x01,
+            // Code section (27 = 0x1b bytes)
+            0x0a, 0x1b, 0x02,
+            // Body 0 (zerho_alloc): return 16
+            0x04, 0x00, 0x41, 0x10, 0x0b,
+            // Body 1 (zerho_transform): mem[ptr] = 'Z' (90 = 0xda 0x00), return (ptr << 32) | len
+            0x14, 0x00,
+            0x20, 0x00, 0x41, 0xda, 0x00, 0x3a, 0x00, 0x00,
+            0x20, 0x00, 0xad, 0x42, 0x20, 0x86,
+            0x20, 0x01, 0xad, 0x84,
+            0x0b,
+        ];
+
+        let host = WasmPluginHost::new().expect("wasmtime host should initialize");
+        let compiled = host
+            .load_bytes("string-plugin", "plugins/string.wasm", STRING_TRANSFORM_WASM)
+            .expect("string transform wasm should compile");
+        let out = host
+            .call_string_hook(&compiled, "zerho_transform", "abc")
+            .expect("string hook should succeed");
+        assert_eq!(out.as_deref(), Some("Zbc"));
     }
 }

@@ -1,6 +1,6 @@
 # zerho Roadmap
 
-> **Current verified baseline:** `v0.8.0` — 100% Safe Rust (`unsafe_code = "forbid"`), **56/56 tests passing**, **100/100 Vektor repo hygiene**, deep CJS↔ESM pre-bundler, CSS `@import`/`url(...)` asset rewriting, Multi-Page Apps (`[build.entries]`), and `zerho migrate` from Vite.
+> **Current verified baseline:** `v0.9.0` — 100% Safe Rust (`unsafe_code = "forbid"`), **60/60 tests passing**, **100/100 Vektor repo hygiene**, Web Workers + `.wasm` imports, string-passing WASM plugin ABI + Rust example plugin, SSR Edge target (`--ssr`), and Live Treemap in `/__inspect`.
 
 ---
 
@@ -23,12 +23,12 @@
 
 ---
 
-## `v0.9.0` — Modern Web Platform & Full WASM Component Model
+## `v0.9.0` — Modern Web Platform & Full WASM Component Model *(Completed)*
 
-- [ ] **Web Workers & `.wasm` Imports:** Detect `new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })` and `import init from './mod.wasm'` and emit dedicated hashed chunks automatically.
-- [ ] **Full WASM Component Model (`wasmtime` `component-model`):** Pass/return strings across `resolve-id`, `load`, and `transform` hooks for `zerho:plugin@0.1.0`, plus a complete Rust → `.wasm` example plugin in `examples/wasm-plugin/`.
-- [ ] **SSR Build Target (`zerho build --ssr`):** Emit DOM-free server bundles targeting Edge runtimes (Cloudflare Workers, Deno, Node, Bun).
-- [ ] **Live Treemap in `/__inspect`:** Embed the interactive bundle treemap directly inside the dev server `/__inspect` DevTools UI.
+- [x] **Web Workers & `.wasm` Imports:** Detect `new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })` and `import init from './mod.wasm'` and emit dedicated hashed chunks automatically.
+- [x] **Full WASM Component Model (`wasmtime` string-passing ABI):** Pass/return strings across `resolve-id`, `load`, and `transform` hooks for `zerho:plugin@0.1.0`, plus a complete Rust → `.wasm` example plugin in `examples/wasm-plugin/`.
+- [x] **SSR Build Target (`zerho build --ssr`):** Emit DOM-free server bundles targeting Edge runtimes (Cloudflare Workers, Deno, Node, Bun).
+- [x] **Live Treemap in `/__inspect`:** Embed the interactive bundle treemap directly inside the dev server `/__inspect` DevTools UI.
 
 ---
 

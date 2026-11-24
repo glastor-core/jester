@@ -192,6 +192,8 @@ pub struct BuildConfig {
     pub brotli: bool,
     pub scope_hoisting: bool,
     pub analyze: bool,
+    /// Emit a DOM-free Edge/Server ESM bundle (`dist/server.mjs`) with `import.meta.env.SSR = true`.
+    pub ssr: bool,
     pub budgets: BudgetsConfig,
     pub lib: LibConfig,
     /// Optional Multi-Page App (MPA) entry map: `"index" -> "src/main.ts"`, `"admin" -> "src/admin.ts"`.
@@ -209,6 +211,7 @@ impl Default for BuildConfig {
             brotli: true,
             scope_hoisting: true,
             analyze: false,
+            ssr: false,
             budgets: BudgetsConfig::default(),
             lib: LibConfig::default(),
             entries: BTreeMap::new(),
@@ -338,6 +341,7 @@ impl ZerhoConfig {
                     config.build.scope_hoisting = parse_bool(value, line_no)?;
                 }
                 ("build", "analyze") => config.build.analyze = parse_bool(value, line_no)?,
+                ("build", "ssr") => config.build.ssr = parse_bool(value, line_no)?,
                 ("build.budgets", "max_js_kb") => {
                     config.build.budgets.max_js_kb = Some(parse_u64(value, line_no)?);
                 }
@@ -521,6 +525,7 @@ impl ZerhoConfig {
         "brotli": { "type": "boolean", "default": true },
         "scope_hoisting": { "type": "boolean", "default": true },
         "analyze": { "type": "boolean", "default": false },
+        "ssr": { "type": "boolean", "default": false },
         "budgets": {
           "type": "object",
           "properties": {

@@ -134,6 +134,12 @@
       color: var(--accent);
     }
     .empty { padding: 2rem; text-align: center; color: var(--muted); }
+    .treemap-panel { margin-top: 1.5rem; padding: 1.25rem; }
+    .treemap-row { margin-bottom: 0.75rem; }
+    .treemap-meta { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; margin-bottom: 0.3rem; font-size: 0.85rem; }
+    .bar-track { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+    .bar-fill { height: 100%; background: linear-gradient(90deg, #f97316, #fb923c); border-radius: 999px; }
+    .search-box { width: 100%; margin-bottom: 1rem; padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-family: "Red Hat Mono", monospace; font-size: 0.85rem; }
   </style>
 </head>
 <body>
@@ -172,10 +178,48 @@
     <div id="table-wrap"></div>
   </section>
 
+  <section class="panel treemap-panel">
+    <div class="panel-header" style="padding: 0 0 1rem; margin-bottom: 1rem;">
+      <h2><span class="material-symbols-outlined">account_tree</span> Live Bundle Treemap</h2>
+      <span class="pill" id="treemap-total">0.00 KB</span>
+    </div>
+    <input id="treemap-filter" class="search-box" type="search" placeholder="Filter modules in live treemap..." />
+    <div id="treemap-wrap"></div>
+  </section>
+
   <script type="module">
+    let latestItems = [];
+    function renderTreemap(items, term = "") {
+      const wrap = document.getElementById("treemap-wrap");
+      const filtered = items
+        .filter(m => !term || m.path.toLowerCase().includes(term))
+        .slice()
+        .sort((a, b) => (b.bytes || 0) - (a.bytes || 0));
+      const total = items.reduce((acc, m) => acc + (m.bytes || 0), 0);
+      document.getElementById("treemap-total").textContent = `${(total / 1024).toFixed(2)} KB total`;
+      if (filtered.length === 0) {
+        wrap.innerHTML = `<div class="empty">No matching modules in live treemap.</div>`;
+        return;
+      }
+      const denom = Math.max(total, 1);
+      wrap.innerHTML = filtered.map(m => {
+        const b = m.bytes || 0;
+        const pct = ((b / denom) * 100).toFixed(1);
+        const width = Math.max(4, Math.min(100, Math.round((b / denom) * 100)));
+        return `<div class="treemap-row">
+          <div class="treemap-meta">
+            <span class="mono">${m.path}</span>
+            <span class="mono" style="color:var(--muted)">${(b / 1024).toFixed(2)} KB (${pct}%)</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div>
+        </div>`;
+      }).join("");
+    }
+
     async function load() {
       const res = await fetch("/__inspect/api");
       const data = await res.json();
+      latestItems = data.items || [];
       document.getElementById("meta").textContent = `${data.project} · ${data.framework} · Zero-Node Rust`;
       document.getElementById("k-modules").textContent = data.modules;
       document.getElementById("k-edges").textContent = data.edges;
@@ -185,20 +229,22 @@
       document.getElementById("k-rate").textContent = `${rate}%`;
 
       const wrap = document.getElementById("table-wrap");
-      if (!data.items || data.items.length === 0) {
+      if (latestItems.length === 0) {
         wrap.innerHTML = `<div class="empty">No modules loaded yet. Open <code>/</code> to populate the incremental graph.</div>`;
+        renderTreemap([]);
         return;
       }
       wrap.innerHTML = `
         <table>
           <thead>
-            <tr><th>Module Path</th><th>Kind</th><th>blake3</th><th>Imports</th><th>Importers</th></tr>
+            <tr><th>Module Path</th><th>Kind</th><th>Size</th><th>blake3</th><th>Imports</th><th>Importers</th></tr>
           </thead>
           <tbody>
-            ${data.items.map(m => `
+            ${latestItems.map(m => `
               <tr>
                 <td class="mono">${m.path}</td>
                 <td><span class="tag">${m.kind}</span></td>
+                <td class="mono">${((m.bytes || 0) / 1024).toFixed(2)} KB</td>
                 <td class="mono">${m.hash}</td>
                 <td class="mono">${m.imports}</td>
                 <td class="mono">${m.importers}</td>
@@ -207,8 +253,12 @@
           </tbody>
         </table>
       `;
+      renderTreemap(latestItems, document.getElementById("treemap-filter").value.trim().toLowerCase());
     }
     document.getElementById("refresh-btn").addEventListener("click", load);
+    document.getElementById("treemap-filter").addEventListener("input", (e) => {
+      renderTreemap(latestItems, e.target.value.trim().toLowerCase());
+    });
     load();
   </script>
 </body>

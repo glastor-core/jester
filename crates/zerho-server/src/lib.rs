@@ -481,8 +481,9 @@ async fn serve_inspect_api(State(state): State<Arc<ServerState>>) -> Response {
                         .unwrap_or(&node.path)
                         .to_string_lossy()
                         .replace('\\', "/");
+                    let bytes = std::fs::metadata(&node.path).map_or(0, |m| m.len());
                     format!(
-                        "{{\"path\":\"/{rel}\",\"kind\":\"{}\",\"hash\":\"{}\",\"imports\":{},\"importers\":{}}}",
+                        "{{\"path\":\"/{rel}\",\"kind\":\"{}\",\"hash\":\"{}\",\"bytes\":{bytes},\"imports\":{},\"importers\":{}}}",
                         module_kind_tag(node.kind),
                         node.hash.short_hex(),
                         node.imports.len(),
