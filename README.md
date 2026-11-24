@@ -76,6 +76,17 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+## Continuous DevSecOps & Supply-Chain Verification (GLASTOR® Core)
+
+`zerho` dogfoods the **GLASTOR® Core** security and verification toolchain on every push, pull request, and tagged release (`.github/workflows/audit.yml` & `.github/workflows/release.yml`), with all actions pinned to 40-character commit SHAs:
+
+| Tool | Role in `zerho` CI/CD | Output / Gate |
+| :--- | :--- | :--- |
+| **[GLASTOR® Specter](https://specter.glastor.es)** | Zero-compiler Rust AST public API contract differ & Trojan Breaking-Change guard across all 9 crates | SemVer gatekeeper + SARIF 2.1.0 + CycloneDX SBOM |
+| **[GLASTOR® Byte-Gauge](https://github.com/glastor-core/byte-gauge)** | SIMD binary hardening auditor on compiled `zerho` release binaries (ASLR/PIE, NX/DEP, Shannon entropy, `.symtab` strip, `< 25 MB` budget) | Release gate + `zerho-x86_64-unknown-linux-gnu.sbom.cdx.json` attached to GitHub Releases |
+| **[GLASTOR® pii-veil](https://pii-veil.glastor.es)** | Sub-millisecond Rust DLP scanner auditing `crates/` for accidental PII or credential leaks | Continuous DLP telemetry |
+| **[GLASTOR® Nemesis](https://github.com/glastor-core/nemesis)** | Universal DevSecOps auditor (Gitleaks secret scan, Semgrep SAST, Trivy SCA, license compliance, repo hygiene) | Weekly + PR/push SARIF upload to GitHub Security |
+
 ---
 
 Part of the **GLASTOR® Rust Toolchain** — [zerho.xyz](https://zerho.xyz) · [glastor.es](https://glastor.es) · [pii-veil](https://pii-veil.glastor.es) · [specter](https://specter.glastor.es)

@@ -191,6 +191,7 @@ const cliCommands = [
         <li><a href="#css-assets">CSS Modules &amp; Assets</a></li>
         <li><a href="#env-proxy">.env &amp; HTTP Proxy</a></li>
         <li><a href="#wasm-wit">WASM Plugin WIT Contract</a></li>
+        <li><a href="#devsecops">DevSecOps &amp; Supply Chain</a></li>
       </ul>
     </aside>
 
@@ -378,6 +379,53 @@ const cliCommands = [
             </button>
           </div>
           <pre class="notranslate" translate="no"><code set:text={witContract} /></pre>
+        </div>
+      </section>
+
+      <section id="devsecops">
+        <h2>
+          <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">verified_user</span>
+          Continuous DevSecOps &amp; Supply-Chain Verification
+        </h2>
+        <p>
+          Every commit, pull request, and tagged release of <strong class="notranslate" translate="no">zerho</strong>
+          is continuously audited by the <strong class="notranslate" translate="no">GLASTOR® Core</strong>
+          security toolchain (<span class="inline-code notranslate" translate="no">.github/workflows/audit.yml</span>
+          &amp; <span class="inline-code notranslate" translate="no">.github/workflows/release.yml</span>), with
+          every GitHub Action pinned to an immutable 40-character commit SHA:
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tool</th>
+                <th>Role in <span class="notranslate" translate="no">zerho</span> CI/CD</th>
+                <th>Artifact / Gate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><a href="https://specter.glastor.es" target="_blank" rel="noopener noreferrer" class="notranslate" translate="no" style="color: var(--accent-bright);">GLASTOR® Specter</a></td>
+                <td>Zero-compiler Rust AST public API contract differ &amp; Trojan Breaking-Change guard across all 9 crates.</td>
+                <td>SemVer gate + SARIF 2.1.0 + CycloneDX SBOM</td>
+              </tr>
+              <tr>
+                <td><a href="https://github.com/glastor-core/byte-gauge" target="_blank" rel="noopener noreferrer" class="notranslate" translate="no" style="color: var(--accent-bright);">GLASTOR® Byte-Gauge</a></td>
+                <td>SIMD binary hardening auditor on compiled <span class="inline-code notranslate" translate="no">zerho</span> binaries (ASLR/PIE, NX/DEP, Shannon entropy, stripped symbols, &lt; 25 MB budget).</td>
+                <td>Release gate + CycloneDX SBOM attached to GitHub Releases</td>
+              </tr>
+              <tr>
+                <td><a href="https://pii-veil.glastor.es" target="_blank" rel="noopener noreferrer" class="notranslate" translate="no" style="color: var(--accent-bright);">GLASTOR® pii-veil</a></td>
+                <td>Sub-millisecond Rust DLP engine scanning <span class="inline-code notranslate" translate="no">crates/</span> for accidental PII or secret exposure.</td>
+                <td>Continuous DLP telemetry</td>
+              </tr>
+              <tr>
+                <td><a href="https://github.com/glastor-core/nemesis" target="_blank" rel="noopener noreferrer" class="notranslate" translate="no" style="color: var(--accent-bright);">GLASTOR® Nemesis</a></td>
+                <td>Universal DevSecOps auditor (Gitleaks secret scan, Semgrep SAST, Trivy SCA, license compliance, repo hygiene).</td>
+                <td>Weekly + PR/push SARIF upload to GitHub Security</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
     </article>
