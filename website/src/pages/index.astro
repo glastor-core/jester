@@ -3,9 +3,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
 const installMethods = [
   {
-    id: 'cargo',
-    label: 'Cargo (Rust)',
-    cmd: 'cargo install --git https://github.com/glastor-core/jester zerho-cli',
+    id: 'homebrew',
+    label: 'Homebrew',
+    cmd: 'brew install glastor-core/tap/zerho',
   },
   {
     id: 'unix',
@@ -18,9 +18,9 @@ const installMethods = [
     cmd: 'irm https://raw.githubusercontent.com/glastor-core/jester/main/scripts/install.ps1 | iex',
   },
   {
-    id: 'quickstart',
-    label: 'Quick Start',
-    cmd: 'zerho init my-app --template react-tsx && cd my-app && zerho dev',
+    id: 'cargo',
+    label: 'Cargo (Rust)',
+    cmd: 'cargo install --git https://github.com/glastor-core/jester zerho-cli',
   },
 ];
 

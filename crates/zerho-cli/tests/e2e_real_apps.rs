@@ -334,3 +334,103 @@ async fn e2e_strict_typescript_dev_ssr_and_preview() {
 
     let _ = fs::remove_dir_all(&root);
 }
+
+#[tokio::test]
+#[allow(clippy::too_many_lines)]
+async fn e2e_modern_react_ecosystem_packages_and_dashboard() {
+    let root = make_temp_app("react-ecosystem");
+    write_file(
+        &root.join("index.html"),
+        "<!doctype html><html><body><div id=\"root\"></div><script type=\"module\" src=\"/src/main.tsx\"></script></body></html>",
+    );
+    // Scoped package (@tanstack/react-query)
+    write_file(
+        &root.join("node_modules/@tanstack/react-query/package.json"),
+        "{\"name\":\"@tanstack/react-query\",\"version\":\"5.0.0\",\"type\":\"module\",\"exports\":{\".\":\"./index.js\"}}",
+    );
+    write_file(
+        &root.join("node_modules/@tanstack/react-query/index.js"),
+        "export function useQuery(opts) { return { key: opts.queryKey, status: 'ok' }; }\n",
+    );
+    // State store (zustand)
+    write_file(
+        &root.join("node_modules/zustand/package.json"),
+        "{\"name\":\"zustand\",\"version\":\"5.0.0\",\"type\":\"module\",\"exports\":{\".\":\"./index.js\"}}",
+    );
+    write_file(
+        &root.join("node_modules/zustand/index.js"),
+        "export function create(init) { return init((p) => p); }\n",
+    );
+    // Router (react-router)
+    write_file(
+        &root.join("node_modules/react-router/package.json"),
+        "{\"name\":\"react-router\",\"version\":\"7.0.0\",\"type\":\"module\",\"exports\":{\".\":\"./index.js\"}}",
+    );
+    write_file(
+        &root.join("node_modules/react-router/index.js"),
+        "export function createBrowserRouter(routes) { return routes; }\n",
+    );
+    // Icon barrel (lucide-react) — tests Barrel Optimizer skipping unused icons
+    write_file(
+        &root.join("node_modules/lucide-react/package.json"),
+        "{\"name\":\"lucide-react\",\"version\":\"0.500.0\",\"type\":\"module\",\"exports\":{\".\":\"./index.js\"}}",
+    );
+    write_file(
+        &root.join("node_modules/lucide-react/icons/bolt.js"),
+        "export const Bolt = () => 'bolt-svg';\n",
+    );
+    write_file(
+        &root.join("node_modules/lucide-react/icons/unused.js"),
+        "export const UnusedHugeIcon = () => 'NEVER_LOAD_THIS_ICON';\n",
+    );
+    write_file(
+        &root.join("node_modules/lucide-react/index.js"),
+        "export { Bolt } from './icons/bolt.js';\nexport { UnusedHugeIcon } from './icons/unused.js';\n",
+    );
+    // Tailwind-style CSS with @import + @layer + custom properties
+    write_file(
+        &root.join("src/theme.css"),
+        "@layer base { :root { --tw-accent: #f97316; } }\n",
+    );
+    write_file(
+        &root.join("src/app.css"),
+        "@import './theme.css';\n@layer utilities { .text-accent { color: var(--tw-accent); } }\n",
+    );
+    write_file(
+        &root.join("src/main.tsx"),
+        "import './app.css';\n\
+         import { useQuery } from '@tanstack/react-query';\n\
+         import { create } from 'zustand';\n\
+         import { createBrowserRouter } from 'react-router';\n\
+         import { Bolt } from 'lucide-react';\n\
+         const store = create(() => ({ count: 1 }));\n\
+         const q = useQuery({ queryKey: ['stats'] });\n\
+         const router = createBrowserRouter([{ path: '/' }]);\n\
+         console.log(store, q, router, Bolt());\n",
+    );
+
+    let mut cfg = ZerhoConfig::default();
+    cfg.project.root.clone_from(&root);
+    cfg.project.entry = PathBuf::from("src/main.tsx");
+    cfg.project.framework = Framework::Vanilla;
+
+    let mut bundler = Bundler::new(cfg);
+    let out = bundler.build().expect("modern React ecosystem build");
+    let js_chunk = out
+        .chunks
+        .iter()
+        .find(|c| is_js_chunk(&c.file_name))
+        .expect("emitted JS chunk");
+    let js_code =
+        fs::read_to_string(root.join("dist").join(&js_chunk.file_name)).expect("read built bundle");
+    assert!(
+        js_code.contains("bolt-svg"),
+        "used icon missing from bundle"
+    );
+    assert!(
+        !js_code.contains("NEVER_LOAD_THIS_ICON"),
+        "unused barrel icon should have been bypassed/shaken"
+    );
+
+    let _ = fs::remove_dir_all(&root);
+}

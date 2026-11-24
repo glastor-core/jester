@@ -8,17 +8,14 @@ class Zerho < Formula
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/glastor-core/jester/releases/download/v#{version}/zerho-macos-arm64.tar.gz"
-      sha256 "REPLACE_WITH_MACOS_ARM64_SHA256"
-    else
-      url "https://github.com/glastor-core/jester/releases/download/v#{version}/zerho-macos-x86_64.tar.gz"
-      sha256 "REPLACE_WITH_MACOS_X86_64_SHA256"
+      sha256 "89844ff31d00a739837ce07605b3c090c9f7953c70884831befbe535dea20c18"
     end
   end
 
   on_linux do
     if Hardware::CPU.intel?
       url "https://github.com/glastor-core/jester/releases/download/v#{version}/zerho-linux-x86_64.tar.gz"
-      sha256 "REPLACE_WITH_LINUX_X86_64_SHA256"
+      sha256 "94a5c98623d5dcb9e9fa4c590cac1d499ec09ad5962a933ce0cc52809df3b173"
     end
   end
 

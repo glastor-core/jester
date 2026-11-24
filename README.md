@@ -34,6 +34,11 @@ Build, serve, test, and ship **React, Preact, TypeScript, Web Workers, `.wasm`, 
 
 ## Installation
 
+### Homebrew (macOS ARM64 & Linux x86_64)
+```bash
+brew install glastor-core/tap/zerho
+```
+
 ### Linux & macOS (1-line installer with SHA-256 verification)
 ```sh
 curl -fsSL https://raw.githubusercontent.com/glastor-core/jester/main/scripts/install.sh | sh

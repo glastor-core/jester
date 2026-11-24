@@ -1,0 +1,32 @@
+[project]
+name = "zerho-react-dashboard"
+root = "."
+entry = "src/main.tsx"
+public_dir = "public"
+env_prefix = "ZERHO_"
+framework = "react"
+
+[server]
+host = "127.0.0.1"
+port = 5175
+hmr = true
+partial_bundling = true
+
+[build]
+out_dir = "dist"
+minify = true
+sourcemap = "linked"
+target = "es2022"
+splitting = true
+brotli = true
+scope_hoisting = true
+analyze = true
+
+[css]
+modules = true
+minify = true
+
+[security]
+sri = true
+csp = true
+secret_scan = true
