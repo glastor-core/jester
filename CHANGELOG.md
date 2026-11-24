@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Public Neutral CI Benchmarks (`.github/workflows/benchmarks.yml`):** Automated `zerho` vs `Vite` comparison on 500 & 1,000 TypeScript modules on `ubuntu-latest`, publishing reproducible JSON artifacts and Markdown summary tables.
 - **1-Line Cross-Platform Installers & Packaging (`scripts/install.sh`, `scripts/install.ps1`, `packaging/homebrew/zerho.rb`, `packaging/scoop/zerho.json`):** Verified SHA-256 one-line installers for Linux x64, macOS ARM64/x64, and Windows x64, plus Homebrew tap formula, Scoop manifest, and `x86_64-apple-darwin` added to `release.yml`.
 - **Real-App E2E Integration Suite (`crates/zerho-cli/tests/e2e_real_apps.rs`):** Live TCP/HTTP/WebSocket E2E tests exercising `DevServer`, `Bundler`, and `PreviewServer` against React 19 TSX (Fast Refresh, `/@zerho/bundle`, `/__inspect` Treemap, WebSocket HMR `101`, SHA-384 SRI, Brotli, path traversal), Preact TSX, and strict TypeScript + Edge SSR (`dist/server.mjs`).
+- **`zerho cache-server` (`crates/zerho-server/src/cache_server.rs`):** Standalone pure-Rust HTTP CAS remote team cache daemon (`--host`, `--port`, `--dir`, `--token` / `ZERHO_CACHE_TOKEN`) with `/health`, `/stats`, strict key validation, and atomic writes compatible with `[cache].remote_url`.
+- **Official WASM Framework Plugins (`examples/plugins/{vue-sfc,svelte,solid}/`):** Standalone Rust → `wasm32-unknown-unknown` compiler plugins implementing `zerho:plugin@0.1.0` for Vue SFC (`.vue`), Svelte (`.svelte`), and SolidJS without Node.js.
+- **Native Zero-Node Test Runner (`zerho test`, `crates/zerho-cli/src/test_runner.rs`):** Built-in `oxc`-powered TS/JS test runner supporting `describe`, `test`, `it`, and `expect(...)` matchers (`.toBe`, `.toEqual`, `.toBeTruthy`, `.toBeFalsy`, `.toContain`, `.toBeGreaterThan`, `.toBeLessThan`, `.not.*`) with zero Node.js or Vitest.
 
 ## [0.9.0] - 2026-11-24
 

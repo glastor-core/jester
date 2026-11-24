@@ -1,0 +1,14 @@
+[package]
+name = "zerho-plugin-svelte"
+version = "1.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Official Zero-Node Svelte (.svelte) WASM compiler plugin for zerho"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

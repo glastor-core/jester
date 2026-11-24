@@ -41,8 +41,8 @@
 
 ---
 
-## Post-`v1.0` — Horizon
+## Post-`v1.0` — Horizon *(Completed)*
 
-- [ ] **`zerho cache-server`:** Lightweight pure-Rust HTTP/S3 remote team cache daemon ready for Docker/Kubernetes (`cache.remote_url`).
-- [ ] **Official WASM Framework Plugins:** Vue SFC, Svelte, and SolidJS compiled transforms via `zerho:plugin@0.1.0` without Node.js.
-- [ ] **Integrated Native Test Runner (`zerho test`):** Ultra-fast built-in test runner without Vitest or Node.
+- [x] **`zerho cache-server`:** Lightweight pure-Rust HTTP/CAS remote team cache daemon (`axum`, Bearer auth, `/health`, `/stats`, `/cache/{key}`) ready for Docker/Kubernetes (`cache.remote_url`).
+- [x] **Official WASM Framework Plugins (`examples/plugins/{vue-sfc,svelte,solid}/`):** Vue SFC, Svelte, and SolidJS compiled transforms via `zerho:plugin@0.1.0` without Node.js.
+- [x] **Integrated Native Test Runner (`zerho test`):** Ultra-fast built-in Zero-Node TS/JS test runner (`oxc` AST evaluator, `describe`/`test`/`it`/`expect`) without Vitest or Node.

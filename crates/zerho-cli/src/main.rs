@@ -1,6 +1,7 @@
 mod bench;
 mod migrate;
 mod scaffold;
+mod test_runner;
 
 use bench::execute_bench;
 use migrate::migrate_from_vite;
@@ -11,10 +12,11 @@ use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
+use test_runner::run_native_tests;
 use zerho_bundler::{Bundler, run_project_check};
 use zerho_config::ZerhoConfig;
 use zerho_core::{ZerhoError, ZerhoResult};
-use zerho_server::{DevServer, PreviewServer};
+use zerho_server::{CacheServer, CacheServerConfig, DevServer, PreviewServer};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -60,6 +62,8 @@ async fn run(args: &[String]) -> ZerhoResult<()> {
         "check" => cmd_check(&args[1..]),
         "preview" => cmd_preview(&args[1..]).await,
         "bench" => cmd_bench(&args[1..]),
+        "test" => cmd_test(&args[1..]),
+        "cache-server" => cmd_cache_server(&args[1..]).await,
         other => Err(ZerhoError::Config(format!(
             "unknown command `{other}` (run `zerho --help` for usage)"
         ))),
@@ -346,6 +350,47 @@ fn load_or_default(config_path: Option<&str>) -> ZerhoResult<ZerhoConfig> {
     }
 }
 
+fn cmd_test(flags: &[String]) -> ZerhoResult<()> {
+    let config = load_or_default(find_flag_value(flags, "--config"))?;
+    let filter = find_positional_arg(flags);
+    let summary = run_native_tests(&config.project.root, filter)?;
+    println!(
+        "\nzerho test complete (Zero-Node · {} file(s), {} passed, {} failed in {} ms)",
+        summary.files, summary.passed, summary.failed, summary.duration_ms
+    );
+    if summary.failed > 0 {
+        return Err(ZerhoError::Config(format!(
+            "{} test(s) failed",
+            summary.failed
+        )));
+    }
+    Ok(())
+}
+
+async fn cmd_cache_server(flags: &[String]) -> ZerhoResult<()> {
+    let mut cfg = CacheServerConfig::default();
+    if let Some(host) = find_flag_value(flags, "--host") {
+        cfg.host = host.to_owned();
+    }
+    if let Some(port_raw) = find_flag_value(flags, "--port") {
+        cfg.port = port_raw
+            .parse::<u16>()
+            .map_err(|_| ZerhoError::Config(format!("invalid `--port` value `{port_raw}`")))?;
+    }
+    if let Some(dir) = find_flag_value(flags, "--dir") {
+        cfg.data_dir = PathBuf::from(dir);
+    }
+    if let Some(tok) = find_flag_value(flags, "--token") {
+        cfg.token = Some(tok.to_owned());
+    } else if let Ok(env_tok) = env::var("ZERHO_CACHE_TOKEN")
+        && !env_tok.trim().is_empty()
+    {
+        cfg.token = Some(env_tok);
+    }
+    let server = CacheServer::new(cfg);
+    server.serve().await
+}
+
 fn find_positional_arg(flags: &[String]) -> Option<&str> {
     let mut skip_next = false;
     for arg in flags {
@@ -355,7 +400,14 @@ fn find_positional_arg(flags: &[String]) -> Option<&str> {
         }
         if matches!(
             arg.as_str(),
-            "--template" | "--config" | "--port" | "--iterations" | "--synthetic"
+            "--template"
+                | "--config"
+                | "--port"
+                | "--host"
+                | "--dir"
+                | "--token"
+                | "--iterations"
+                | "--synthetic"
         ) {
             skip_next = true;
             continue;
@@ -390,6 +442,8 @@ fn print_help() {
            build     Build production bundle (scope-hoisted JS/CSS, Brotli, SRI, manifest)\n\
            check     Audit module graph for broken imports, cycles, missing .env, and secrets\n\
            preview   Preview the production build locally (serves pre-compressed .br)\n\
+           test [FILTER] Run native Zero-Node TS/JS test suite (*.test.* / *.spec.*)\n\
+           cache-server  Start the pure-Rust HTTP remote team cache daemon\n\
            bench     Run reproducible transform, cache, and build benchmarks\n\
            init [DIR]    Scaffold a Zero-Node project (--template basic-ts | react-tsx)\n\
            migrate [DIR] Migrate an existing Vite project to zerho.toml (--dry-run | --force)\n\

@@ -168,6 +168,8 @@ const cliCommands = [
   { cmd: 'zerho build [--config PATH] [--analyze] [--watch] [--ssr]', desc: 'Parallel rayon build with Scope Hoisting, oxc_minifier, redb cache, Web Workers/.wasm, Shared Chunks + modulepreload, Brotli .br, SRI/CSP, SSR Edge mode, and optional dist/stats.html.' },
   { cmd: 'zerho check [--config PATH] [--strict]', desc: 'Audit the full module graph in milliseconds for broken imports, circular dependencies, missing .env vars, and leaked secrets.' },
   { cmd: 'zerho preview [--config PATH] [--port PORT]', desc: 'Serve the production dist/ directory locally with automatic Accept-Encoding: br negotiation.' },
+  { cmd: 'zerho test [FILTER] [--config PATH]', desc: 'Run *.test.{ts,tsx,js,jsx} and *.spec.* suites natively with oxc (describe/test/it/expect) without Vitest or Node.js.' },
+  { cmd: 'zerho cache-server [--host H] [--port P] [--dir DIR] [--token TOK]', desc: 'Start the pure-Rust HTTP CAS remote team cache daemon compatible with [cache].remote_url.' },
   { cmd: 'zerho bench [--config PATH] [--iterations N] [--synthetic N] [--json]', desc: 'Run reproducible cold Oxc transform, warm redb cache, and full/synthetic N-module build benchmarks with optional JSON telemetry.' },
   { cmd: 'zerho schema', desc: 'Print the complete JSON Schema for zerho.toml for IDE validation and autocompletion.' },
   { cmd: 'zerho wit', desc: 'Print the canonical zerho:plugin@0.1.0 WebAssembly Component Model WIT contract.' },

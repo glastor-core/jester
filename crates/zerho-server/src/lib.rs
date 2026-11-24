@@ -1,3 +1,7 @@
+mod cache_server;
+
+pub use cache_server::{CacheServer, CacheServerConfig};
+
 use axum::Router;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path as AxumPath, Request, State};

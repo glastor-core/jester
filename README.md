@@ -46,7 +46,7 @@ cargo build --release -p zerho-cli && ./target/release/zerho bench --synthetic 5
 | `zerho-transform` | `oxc` TS/JSX/React Fast Refresh compiler, `oxc_minifier`/`oxc_mangler`, Scope Hoisting, Barrel & CJS pre-bundler, Web Workers, CSS `@import`/`url()`, SVG optimizer |
 | `zerho-server` | Zero-Node `axum` + `tokio` + `notify` dev server, WebSocket HMR, `/@zerho/bundle`, `/__inspect` Live Treemap, and Brotli `PreviewServer` |
 | `zerho-bundler` | `rayon` parallel bundler, incremental `redb` cache, Shared Chunks + `modulepreload`, MPA, Library Mode, Web Workers/`.wasm`, Edge SSR (`--ssr`), WebP, `zerho check`, `dist/stats.html` |
-| `zerho-cli` | Single binary CLI (`init`, `migrate`, `dev`, `build [--analyze] [--watch] [--ssr]`, `check [--strict]`, `preview`, `bench [--synthetic N] [--json]`, `schema`, `wit`) |
+| `zerho-cli` | Single binary CLI (`init`, `migrate`, `dev`, `build [--analyze] [--watch] [--ssr]`, `check [--strict]`, `preview`, `test`, `cache-server`, `bench [--synthetic N] [--json]`, `schema`, `wit`) |
 
 ## Quick Start
 
