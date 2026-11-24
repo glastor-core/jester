@@ -129,6 +129,32 @@ body {
   color: var(--accent-bright);
 }
 
+.sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.back-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 500;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+
+.back-link:hover {
+  color: #ffffff;
+  border-color: var(--accent-border);
+  background: var(--accent-dim);
+}
+
 .sidebar-status {
   padding: 12px;
   border-radius: 10px;
@@ -447,6 +473,93 @@ body {
   border-bottom: none;
 }
 
+/* Sub-views (Build Pipeline & Security) */
+.view-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.filter-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-pill {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+
+.filter-pill:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.filter-pill[data-active="true"] {
+  background: var(--accent-dim);
+  border-color: var(--accent-border);
+  color: var(--accent-bright);
+  font-weight: 600;
+}
+
+.spec-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.check-detail {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.code-pre {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 9px;
+  background: #070b12;
+  border: 1px solid var(--border);
+  color: #cbd5e1;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.code-accent {
+  color: var(--accent-bright);
+}
+
+.code-green {
+  color: var(--green);
+}
+
+.empty-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  background: rgba(13, 19, 32, 0.55);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
 @media (max-width: 920px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -466,7 +579,8 @@ body {
   .kpi-cell:nth-child(2) {
     border-bottom: 1px solid var(--border);
   }
-  .panel-grid {
+  .panel-grid,
+  .spec-grid {
     grid-template-columns: 1fr;
   }
 }

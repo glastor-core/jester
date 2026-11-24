@@ -17,12 +17,21 @@ export interface PipelineStage {
 export interface SecurityCheck {
   readonly label: string;
   readonly badge: string;
+  readonly detail: string;
+}
+
+export interface CrateEntry {
+  readonly name: string;
+  readonly role: string;
+  readonly avgMs: string;
+  readonly safety: string;
 }
 
 export interface DashboardState {
   readonly metrics: readonly MetricItem[];
   readonly stages: readonly PipelineStage[];
   readonly checks: readonly SecurityCheck[];
+  readonly crates: readonly CrateEntry[];
 }
 
 export function createInitialState(): DashboardState {
@@ -41,11 +50,38 @@ export function createInitialState(): DashboardState {
       { name: "Scope Hoisting + Brotli .br + SRI", crateName: "zerho-bundler", ms: 4.18, pct: 86, cached: false },
     ],
     checks: [
-      { label: "SHA-384 Subresource Integrity", badge: "verified" },
-      { label: "Strict dist/csp.json Manifest", badge: "active" },
-      { label: "Client Secret Leak Guard", badge: "0 leaks" },
-      { label: "Brotli .br Pre-Compression", badge: "-56% size" },
-      { label: "Wasmtime Fuel-Metered Sandbox", badge: "1M fuel" },
+      {
+        label: "SHA-384 Subresource Integrity",
+        badge: "verified",
+        detail: "Injects integrity=\"sha384-...\" on all emitted JS/CSS tags in index.html.",
+      },
+      {
+        label: "Strict dist/csp.json Manifest",
+        badge: "active",
+        detail: "Generates hash-pinned Content-Security-Policy directives for edge headers.",
+      },
+      {
+        label: "Client Secret Leak Guard",
+        badge: "0 leaks",
+        detail: "Scans bundled client chunks for cloud keys, tokens, and PEM headers.",
+      },
+      {
+        label: "Brotli .br Pre-Compression",
+        badge: "-56% size",
+        detail: "Writes static .br sidecars ready for Cloudflare, Nginx, and Caddy.",
+      },
+      {
+        label: "Wasmtime Fuel-Metered Sandbox",
+        badge: "1M fuel",
+        detail: "Executes WASM plugins with strict CPU fuel budgets and zero host FS access.",
+      },
+    ],
+    crates: [
+      { name: "zerho-resolver", role: "ESM/CJS resolution, package.json exports & tsconfig paths", avgMs: "0.42 ms", safety: "0 unsafe" },
+      { name: "zerho-transform", role: "Oxc TS/JSX, Fast Refresh, lightningcss & CSS @import", avgMs: "1.50 ms", safety: "0 unsafe" },
+      { name: "zerho-bundler", role: "Scope hoisting, code splitting, Brotli .br, SRI & CSP", avgMs: "4.18 ms", safety: "0 unsafe" },
+      { name: "zerho-cache", role: "Persistent ACID redb B-tree & remote HTTP CAS client", avgMs: "0.002 ms", safety: "0 unsafe" },
+      { name: "zerho-plugin", role: "Wasmtime UTF-8 linear-memory plugin host (Vue/Svelte/Solid)", avgMs: "0.18 ms", safety: "0 unsafe" },
     ],
   };
 }
