@@ -248,7 +248,11 @@ mod tests {
         .expect("write vite.config.ts");
 
         let summary = migrate_from_vite(&dir, false, false).expect("migration should succeed");
-        assert!(summary.detected_files.contains(&"vite.config.ts".to_owned()));
+        assert!(
+            summary
+                .detected_files
+                .contains(&"vite.config.ts".to_owned())
+        );
         assert!(dir.join("zerho.toml").is_file());
         assert!(dir.join("zerho.schema.json").is_file());
 

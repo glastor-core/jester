@@ -102,7 +102,12 @@ fn scaffold_basic_ts(root: &Path, name: &str, created: &mut Vec<PathBuf>) -> Zer
         &render_html(name, "/src/main.ts", "app"),
         created,
     )?;
-    write_file(root, "zerho.schema.json", ZerhoConfig::json_schema(), created)?;
+    write_file(
+        root,
+        "zerho.schema.json",
+        ZerhoConfig::json_schema(),
+        created,
+    )?;
     write_file(root, "tsconfig.json", TSCONFIG_JSON, created)?;
     write_file(root, "src/zerho-env.d.ts", ZERHO_ENV_DTS, created)?;
     write_file(root, "src/styles.css", BASE_CSS, created)?;
@@ -158,15 +163,30 @@ fn scaffold_react_tsx(root: &Path, name: &str, created: &mut Vec<PathBuf>) -> Ze
         &render_html(name, "/src/main.tsx", "root"),
         created,
     )?;
-    write_file(root, "zerho.schema.json", ZerhoConfig::json_schema(), created)?;
+    write_file(
+        root,
+        "zerho.schema.json",
+        ZerhoConfig::json_schema(),
+        created,
+    )?;
     write_file(root, "tsconfig.json", TSCONFIG_JSON, created)?;
     write_file(root, "src/zerho-env.d.ts", ZERHO_ENV_DTS, created)?;
     write_file(root, "src/styles.css", BASE_CSS, created)?;
     write_file(root, "src/lazy-panel.tsx", REACT_LAZY_TSX, created)?;
     write_file(root, "src/main.tsx", REACT_MAIN_TSX, created)?;
-    write_file(root, "node_modules/react/package.json", REACT_PKG_JSON, created)?;
+    write_file(
+        root,
+        "node_modules/react/package.json",
+        REACT_PKG_JSON,
+        created,
+    )?;
     write_file(root, "node_modules/react/index.js", REACT_INDEX_JS, created)?;
-    write_file(root, "node_modules/react/jsx-runtime.js", REACT_JSX_RUNTIME_JS, created)?;
+    write_file(
+        root,
+        "node_modules/react/jsx-runtime.js",
+        REACT_JSX_RUNTIME_JS,
+        created,
+    )?;
     Ok(())
 }
 
@@ -530,7 +550,9 @@ mod tests {
             let mut cfg = ZerhoConfig::load(&dir.join("zerho.toml")).expect("config should load");
             cfg.project.root = dir.clone();
             let mut bundler = Bundler::new(cfg);
-            let out = bundler.build().expect("scaffolded project should build cleanly");
+            let out = bundler
+                .build()
+                .expect("scaffolded project should build cleanly");
             assert!(out.out_dir.join("index.html").is_file());
             assert!(out.out_dir.join("logo.svg").is_file());
             assert!(out.out_dir.join("manifest.json").is_file());

@@ -51,6 +51,15 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }} -p zerho-cli
 
+      - name: Audit release binary with GLASTOR Byte-Gauge (Linux)
+        if: runner.os == 'Linux'
+        uses: glastor-core/byte-gauge@2a6fca514168a8e825925d94ad19ab6e4725e336 # v1
+        with:
+          file-path: "target/${{ matrix.target }}/release/${{ matrix.bin }}"
+          max-size-mb: "25"
+          output-sbom: "zerho-${{ matrix.target }}.sbom.cdx.json"
+          post-pr-comment: "false"
+
       - name: Package archive (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -71,3 +80,4 @@ jobs:
           files: |
             ${{ matrix.archive }}
             ${{ matrix.archive }}.sha256
+            zerho-*.sbom.cdx.json

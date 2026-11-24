@@ -27,7 +27,11 @@ pub struct PluginTransformResult {
 pub trait Plugin: Send + Sync {
     fn name(&self) -> &str;
 
-    fn resolve_id(&self, _specifier: &str, _importer: Option<&Path>) -> ZerhoResult<Option<String>> {
+    fn resolve_id(
+        &self,
+        _specifier: &str,
+        _importer: Option<&Path>,
+    ) -> ZerhoResult<Option<String>> {
         Ok(None)
     }
 
@@ -83,7 +87,10 @@ impl Plugin for DefinePlugin {
             }
         }
         if changed {
-            Ok(Some(PluginTransformResult { code: updated, sourcemap: None }))
+            Ok(Some(PluginTransformResult {
+                code: updated,
+                sourcemap: None,
+            }))
         } else {
             Ok(None)
         }
@@ -135,7 +142,10 @@ impl PluginRegistry {
         kind: ModuleKind,
         ctx: &PluginContext,
     ) -> ZerhoResult<PluginTransformResult> {
-        let mut current = PluginTransformResult { code: initial_code, sourcemap: None };
+        let mut current = PluginTransformResult {
+            code: initial_code,
+            sourcemap: None,
+        };
         for plugin in &self.plugins {
             if let Some(updated) = plugin.transform(&current.code, id, kind, ctx)? {
                 current = updated;

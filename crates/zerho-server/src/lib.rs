@@ -1,13 +1,13 @@
-use std::net::SocketAddr;
-use std::path::{Component, Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use axum::Router;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path as AxumPath, Request, State};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{any, get};
-use axum::Router;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
+use std::net::SocketAddr;
+use std::path::{Component, Path, PathBuf};
+use std::sync::{Arc, RwLock};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast;
@@ -212,12 +212,9 @@ impl PreviewServer {
             )));
         }
 
-        let addr: SocketAddr = format!(
-            "{}:{}",
-            self.config.server.host, self.config.server.port
-        )
-        .parse()
-        .map_err(|err| ZerhoError::Server(format!("invalid bind address: {err}")))?;
+        let addr: SocketAddr = format!("{}:{}", self.config.server.host, self.config.server.port)
+            .parse()
+            .map_err(|err| ZerhoError::Server(format!("invalid bind address: {err}")))?;
 
         let listener = TcpListener::bind(addr)
             .await
@@ -439,10 +436,7 @@ async fn serve_hmr_client() -> Response {
     js_response(HMR_CLIENT_JS.to_owned(), "no-cache")
 }
 
-async fn hmr_ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<ServerState>>,
-) -> Response {
+async fn hmr_ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<ServerState>>) -> Response {
     let rx = state.hmr_tx.subscribe();
     ws.on_upgrade(move |socket| handle_ws(socket, rx))
 }
@@ -522,7 +516,11 @@ async fn serve_inspect_api(State(state): State<Arc<ServerState>>) -> Response {
 /// `DiskCache` and CSS HMR imports active.
 async fn serve_partial_bundle(State(state): State<Arc<ServerState>>) -> Response {
     if !state.config.server.partial_bundling {
-        return (StatusCode::NOT_FOUND, "partial bundling disabled in zerho.toml").into_response();
+        return (
+            StatusCode::NOT_FOUND,
+            "partial bundling disabled in zerho.toml",
+        )
+            .into_response();
     }
 
     let entry_path = state.root.join(&state.config.project.entry);
@@ -547,8 +545,8 @@ async fn serve_partial_bundle(State(state): State<Arc<ServerState>>) -> Response
         );
     }
 
-    let entry_key = path_to_web_url(&state.root, &entry_canon)
-        .unwrap_or_else(|| "/src/main.ts".to_owned());
+    let entry_key =
+        path_to_web_url(&state.root, &entry_canon).unwrap_or_else(|| "/src/main.ts".to_owned());
 
     let mut out = String::new();
     for css in css_imports {
@@ -734,7 +732,10 @@ async fn serve_module(
     let resolved = match state.resolver.resolve(&clean_specifier, None) {
         Ok(res) => res,
         Err(err) => {
-            return (StatusCode::NOT_FOUND, format!("// zerho resolve error: {err}\n"))
+            return (
+                StatusCode::NOT_FOUND,
+                format!("// zerho resolve error: {err}\n"),
+            )
                 .into_response();
         }
     };
@@ -788,7 +789,13 @@ async fn serve_module(
     // Resolve static imports to both rewrite URLs for the browser and record real graph edges.
     let mut resolved_edges = Vec::new();
     let final_code = if kind.is_script() {
-        match rewrite_dev_script(&state, &canonical, &clean_specifier, &artifact.code, &mut resolved_edges) {
+        match rewrite_dev_script(
+            &state,
+            &canonical,
+            &clean_specifier,
+            &artifact.code,
+            &mut resolved_edges,
+        ) {
             Ok(code) => code,
             Err(err) => {
                 return js_response(
@@ -803,7 +810,13 @@ async fn serve_module(
 
     let mod_id = ModuleId::from_specifier(&canonical.to_string_lossy());
     if let Ok(mut graph) = state.graph.write() {
-        graph.upsert_module(mod_id, canonical, kind, artifact.output_hash, resolved_edges);
+        graph.upsert_module(
+            mod_id,
+            canonical,
+            kind,
+            artifact.output_hash,
+            resolved_edges,
+        );
     }
 
     match kind {
@@ -952,8 +965,14 @@ fn js_response(code: String, cache_control: &'static str) -> Response {
     (
         StatusCode::OK,
         [
-            (header::CONTENT_TYPE, HeaderValue::from_static("application/javascript; charset=utf-8")),
-            (header::CACHE_CONTROL, HeaderValue::from_static(cache_control)),
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/javascript; charset=utf-8"),
+            ),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static(cache_control),
+            ),
         ],
         code,
     )
@@ -1011,7 +1030,11 @@ async fn forward_http_proxy(target_base: &str, req_path: &str, request: Request)
     }
 
     let Some(split_pos) = raw_resp.windows(4).position(|w| w == b"\r\n\r\n") else {
-        return (StatusCode::BAD_GATEWAY, "zerho proxy invalid upstream response").into_response();
+        return (
+            StatusCode::BAD_GATEWAY,
+            "zerho proxy invalid upstream response",
+        )
+            .into_response();
     };
 
     let head = String::from_utf8_lossy(&raw_resp[..split_pos]);
@@ -1132,7 +1155,8 @@ mod tests {
         let dist_canon = dist.canonicalize().expect("canon dist");
 
         // 1. Path traversal attempt outside dist_root must be rejected (403 Forbidden).
-        let traversal = serve_static_file(&dist_canon, &dist_canon.join("../secret.txt"), false).await;
+        let traversal =
+            serve_static_file(&dist_canon, &dist_canon.join("../secret.txt"), false).await;
         assert_eq!(traversal.status(), StatusCode::FORBIDDEN);
 
         // 2. Client accepting Brotli receives pre-compressed .br with Content-Encoding: br.
@@ -1145,11 +1169,17 @@ mod tests {
         let br_resp = serve_static_file(&dist_canon, &dist_canon.join("app.js"), true).await;
         assert_eq!(br_resp.status(), StatusCode::OK);
         assert_eq!(
-            br_resp.headers().get(header::CONTENT_ENCODING).and_then(|v| v.to_str().ok()),
+            br_resp
+                .headers()
+                .get(header::CONTENT_ENCODING)
+                .and_then(|v| v.to_str().ok()),
             Some("br")
         );
         assert_eq!(
-            br_resp.headers().get(header::VARY).and_then(|v| v.to_str().ok()),
+            br_resp
+                .headers()
+                .get(header::VARY)
+                .and_then(|v| v.to_str().ok()),
             Some("Accept-Encoding")
         );
 

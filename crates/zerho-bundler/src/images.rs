@@ -1,5 +1,5 @@
-use std::io::Cursor;
 use image::ImageFormat;
+use std::io::Cursor;
 
 /// Decodes a PNG or JPEG image in pure Rust and re-encodes it as lossless WebP.
 /// Returns `Some(webp_bytes)` only when the resulting WebP is strictly smaller than the input.

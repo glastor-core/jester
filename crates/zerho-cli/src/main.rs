@@ -2,15 +2,15 @@ mod bench;
 mod migrate;
 mod scaffold;
 
+use bench::execute_bench;
+use migrate::migrate_from_vite;
+use notify::{Event, EventKind, RecursiveMode, Watcher};
+use scaffold::{Template, scaffold_project};
 use std::env;
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
-use bench::execute_bench;
-use migrate::migrate_from_vite;
-use notify::{Event, EventKind, RecursiveMode, Watcher};
-use scaffold::{Template, scaffold_project};
 use zerho_bundler::{Bundler, run_project_check};
 use zerho_config::ZerhoConfig;
 use zerho_core::{ZerhoError, ZerhoResult};
@@ -71,8 +71,7 @@ fn cmd_init(flags: &[String]) -> ZerhoResult<()> {
         Some(raw) => Template::parse(raw)?,
         None => Template::default(),
     };
-    let target_dir = find_positional_arg(flags)
-        .map_or_else(|| PathBuf::from("."), PathBuf::from);
+    let target_dir = find_positional_arg(flags).map_or_else(|| PathBuf::from("."), PathBuf::from);
 
     let created = scaffold_project(&target_dir, template)?;
     println!(
@@ -118,9 +117,9 @@ fn cmd_migrate(flags: &[String]) -> ZerhoResult<()> {
 async fn cmd_dev(flags: &[String]) -> ZerhoResult<()> {
     let mut config = load_or_default(find_flag_value(flags, "--config"))?;
     if let Some(port_raw) = find_flag_value(flags, "--port") {
-        config.server.port = port_raw.parse::<u16>().map_err(|_| {
-            ZerhoError::Config(format!("invalid `--port` value `{port_raw}`"))
-        })?;
+        config.server.port = port_raw
+            .parse::<u16>()
+            .map_err(|_| ZerhoError::Config(format!("invalid `--port` value `{port_raw}`")))?;
     }
     let server = DevServer::new(config);
     server.serve().await
@@ -164,7 +163,11 @@ fn run_single_build(config: &ZerhoConfig) -> ZerhoResult<()> {
         output.out_dir.display()
     );
     for chunk in output.chunks {
-        let raw_kb = format!("{}.{:02} KB", chunk.bytes / 1024, (chunk.bytes % 1024) * 100 / 1024);
+        let raw_kb = format!(
+            "{}.{:02} KB",
+            chunk.bytes / 1024,
+            (chunk.bytes % 1024) * 100 / 1024
+        );
         let gz_kb = format!(
             "{}.{:02} KB",
             chunk.gzip_bytes / 1024,
@@ -210,7 +213,11 @@ fn run_build_watch(config: &ZerhoConfig) -> ZerhoResult<()> {
         if !matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
             return;
         }
-        if event.paths.iter().any(|p| !is_watch_ignored(p) && !p.is_dir()) {
+        if event
+            .paths
+            .iter()
+            .any(|p| !is_watch_ignored(p) && !p.is_dir())
+        {
             let _ = tx.send(());
         }
     })
@@ -226,7 +233,10 @@ fn run_build_watch(config: &ZerhoConfig) -> ZerhoResult<()> {
             reason: format!("failed to watch `{}`: {err}", root.display()),
         })?;
 
-    println!("zerho build --watch listening for changes in {} (Ctrl+C to stop)...", root.display());
+    println!(
+        "zerho build --watch listening for changes in {} (Ctrl+C to stop)...",
+        root.display()
+    );
     while rx.recv().is_ok() {
         // Coalesce rapid editor save bursts.
         while rx.recv_timeout(Duration::from_millis(60)).is_ok() {}
@@ -286,9 +296,9 @@ fn cmd_check(flags: &[String]) -> ZerhoResult<()> {
 async fn cmd_preview(flags: &[String]) -> ZerhoResult<()> {
     let mut config = load_or_default(find_flag_value(flags, "--config"))?;
     if let Some(port_raw) = find_flag_value(flags, "--port") {
-        config.server.port = port_raw.parse::<u16>().map_err(|_| {
-            ZerhoError::Config(format!("invalid `--port` value `{port_raw}`"))
-        })?;
+        config.server.port = port_raw
+            .parse::<u16>()
+            .map_err(|_| ZerhoError::Config(format!("invalid `--port` value `{port_raw}`")))?;
     }
     let server = PreviewServer::new(config);
     server.serve().await

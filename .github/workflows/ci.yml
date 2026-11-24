@@ -18,7 +18,7 @@ env:
 
 jobs:
   check:
-    name: ${{ matrix.os }}
+    name: Rust (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     strategy:
@@ -40,6 +40,9 @@ jobs:
       - name: Cache Cargo artifacts
         uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
 
+      - name: Format check
+        run: cargo fmt --all -- --check
+
       - name: Clippy (pedantic)
         run: cargo clippy --workspace --all-targets -- -D warnings
 
@@ -49,9 +52,59 @@ jobs:
       - name: Build release binary
         run: cargo build --release -p zerho-cli
 
-      - name: Smoke test check and production builds
+      - name: Smoke test check, production, SSR and bench
         shell: bash
         run: |
           ./target/release/zerho check --config examples/basic-ts/zerho.toml
           ./target/release/zerho build --config examples/basic-ts/zerho.toml --analyze
+          ./target/release/zerho build --config examples/basic-ts/zerho.toml --ssr
           ./target/release/zerho build --config examples/react-tsx/zerho.toml
+          ./target/release/zerho bench --synthetic 20 --json > /dev/null
+
+  wasm-plugin-example:
+    name: WASM Plugin Example (wasm32)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain with wasm32 target
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+        with:
+          workspaces: examples/wasm-plugin
+
+      - name: Build example WASM plugin
+        run: cargo build --manifest-path examples/wasm-plugin/Cargo.toml --target wasm32-unknown-unknown --release
+
+  website:
+    name: Website (Astro build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install website dependencies
+        run: npm --prefix website ci
+
+      - name: Build Astro static site
+        env:
+          ASTRO_TELEMETRY_DISABLED: "1"
+        run: npm --prefix website run build

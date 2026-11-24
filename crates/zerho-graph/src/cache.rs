@@ -1,3 +1,4 @@
+use redb::{Database, TableDefinition};
 use std::fmt;
 use std::fs;
 use std::io::{Read, Write};
@@ -6,7 +7,6 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use redb::{Database, TableDefinition};
 use zerho_core::{ContentHash, ZerhoError, ZerhoResult};
 
 const CACHE_MAGIC: &[u8; 4] = b"ZHC1";
@@ -144,7 +144,9 @@ fn resolve_token(raw: &str) -> Option<String> {
         return None;
     }
     if let Some(var_name) = trimmed.strip_prefix("env:") {
-        std::env::var(var_name.trim()).ok().filter(|v| !v.is_empty())
+        std::env::var(var_name.trim())
+            .ok()
+            .filter(|v| !v.is_empty())
     } else {
         Some(trimmed.to_owned())
     }
@@ -352,10 +354,13 @@ impl DiskCache {
             reason: format!("redb begin_write failed: {err}"),
         })?;
         {
-            let mut table = write_txn.open_table(ARTIFACTS_TABLE).map_err(|err| ZerhoError::Io {
-                path: Some(self.db_path()),
-                reason: format!("redb open_table failed: {err}"),
-            })?;
+            let mut table =
+                write_txn
+                    .open_table(ARTIFACTS_TABLE)
+                    .map_err(|err| ZerhoError::Io {
+                        path: Some(self.db_path()),
+                        reason: format!("redb open_table failed: {err}"),
+                    })?;
             table
                 .insert(key.as_bytes().as_slice(), encoded)
                 .map_err(|err| ZerhoError::Io {
@@ -457,7 +462,9 @@ mod tests {
             let writer = DiskCache::new(&temp_dir, true);
             assert!(writer.get(key).is_none());
             writer.record_miss();
-            writer.put(key, &artifact).expect("cache write should succeed");
+            writer
+                .put(key, &artifact)
+                .expect("cache write should succeed");
             assert!(writer.db_path().is_file());
             assert_eq!(
                 writer.stats(),
@@ -550,7 +557,8 @@ mod tests {
                     let _ = stream.write_all(head.as_bytes());
                     let _ = stream.write_all(&body);
                 } else {
-                    let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
+                    let _ =
+                        stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
                 }
             }
             _ => {}
@@ -588,13 +596,15 @@ mod tests {
 
         // Developer A populates local + remote cache.
         {
-            let dev_a = DiskCache::with_remote(&dir_a, true, Some(&remote_url), Some("team-secret"));
+            let dev_a =
+                DiskCache::with_remote(&dir_a, true, Some(&remote_url), Some("team-secret"));
             dev_a.put(key, &artifact).expect("put should succeed");
         }
 
         // Developer B starts with an empty local cache and fetches from remote team cache.
         {
-            let dev_b = DiskCache::with_remote(&dir_b, true, Some(&remote_url), Some("team-secret"));
+            let dev_b =
+                DiskCache::with_remote(&dir_b, true, Some(&remote_url), Some("team-secret"));
             let fetched = dev_b.get(key).expect("should hit remote team cache");
             assert_eq!(fetched, artifact);
             assert_eq!(dev_b.stats().remote_hits, 1);

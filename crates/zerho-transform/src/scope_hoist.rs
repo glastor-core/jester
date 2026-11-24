@@ -1,4 +1,3 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
 use oxc::allocator::Allocator;
 use oxc::ast::ast::{
     Declaration, ExportDefaultDeclarationKind, IdentifierReference, ImportDeclarationSpecifier,
@@ -8,6 +7,7 @@ use oxc::ast_visit::Visit;
 use oxc::parser::Parser;
 use oxc::semantic::{ReferenceId, SemanticBuilder, SymbolId};
 use oxc::span::{GetSpan, SourceType, Span};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Input module passed to [`try_scope_hoist_bundle`] in deterministic post-order DFS
 /// (every dependency must appear before its importer).
@@ -282,7 +282,11 @@ fn hoist_single_module(
     }
 
     // 4. Apply non-overlapping edits right-to-left.
-    edits.sort_by(|a, b| b.0.start.cmp(&a.0.start).then_with(|| b.0.end.cmp(&a.0.end)));
+    edits.sort_by(|a, b| {
+        b.0.start
+            .cmp(&a.0.start)
+            .then_with(|| b.0.end.cmp(&a.0.end))
+    });
     let mut output = module.code.clone();
     let mut last_start = usize::MAX;
     for (span, replacement) in edits {
@@ -335,7 +339,8 @@ mod tests {
     fn scope_hoists_acyclic_esm_and_prevents_symbol_collisions() {
         let math_mod = HoistedModuleInput {
             id: "src/math.ts".to_owned(),
-            code: "const factor = 10;\nexport function scale(n) { return n * factor; }\n".to_owned(),
+            code: "const factor = 10;\nexport function scale(n) { return n * factor; }\n"
+                .to_owned(),
             synthetic_default_expr: None,
             resolved_imports: BTreeMap::new(),
         };

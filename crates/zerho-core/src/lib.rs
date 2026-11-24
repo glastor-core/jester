@@ -130,10 +130,23 @@ impl fmt::Display for Framework {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ZerhoError {
     Config(String),
-    Resolve { specifier: String, importer: Option<PathBuf>, reason: String },
-    Transform { path: PathBuf, reason: String },
-    Io { path: Option<PathBuf>, reason: String },
-    Plugin { plugin: String, reason: String },
+    Resolve {
+        specifier: String,
+        importer: Option<PathBuf>,
+        reason: String,
+    },
+    Transform {
+        path: PathBuf,
+        reason: String,
+    },
+    Io {
+        path: Option<PathBuf>,
+        reason: String,
+    },
+    Plugin {
+        plugin: String,
+        reason: String,
+    },
     Server(String),
     Security(String),
     Budget(String),
@@ -143,7 +156,11 @@ impl fmt::Display for ZerhoError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Config(msg) => write!(f, "config error: {msg}"),
-            Self::Resolve { specifier, importer, reason } => match importer {
+            Self::Resolve {
+                specifier,
+                importer,
+                reason,
+            } => match importer {
                 Some(imp) => write!(
                     f,
                     "failed to resolve `{specifier}` from `{}`: {reason}",
@@ -154,7 +171,10 @@ impl fmt::Display for ZerhoError {
             Self::Transform { path, reason } => {
                 write!(f, "transform error in `{}`: {reason}", path.display())
             }
-            Self::Io { path: Some(path), reason } => {
+            Self::Io {
+                path: Some(path),
+                reason,
+            } => {
                 write!(f, "I/O error for `{}`: {reason}", path.display())
             }
             Self::Io { path: None, reason } => write!(f, "I/O error: {reason}"),
@@ -177,8 +197,14 @@ mod tests {
     #[test]
     fn module_kind_detects_extensions() {
         assert_eq!(ModuleKind::from_path(Path::new("App.tsx")), ModuleKind::Tsx);
-        assert_eq!(ModuleKind::from_path(Path::new("styles.css")), ModuleKind::Css);
-        assert_eq!(ModuleKind::from_path(Path::new("logo.svg")), ModuleKind::Asset);
+        assert_eq!(
+            ModuleKind::from_path(Path::new("styles.css")),
+            ModuleKind::Css
+        );
+        assert_eq!(
+            ModuleKind::from_path(Path::new("logo.svg")),
+            ModuleKind::Asset
+        );
     }
 
     #[test]

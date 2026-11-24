@@ -1,7 +1,7 @@
-use std::io::Write;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use sha2::{Digest, Sha384};
+use std::io::Write;
 use zerho_config::BudgetsConfig;
 use zerho_core::{ZerhoError, ZerhoResult};
 use zerho_transform::encode_base64;
@@ -43,8 +43,14 @@ pub fn scan_for_leaked_secrets(file_name: &str, content: &str) -> ZerhoResult<()
         ("GitHub Fine-Grained PAT", concat!("github_", "pat_")),
         ("Stripe Live Secret Key", concat!("sk_", "live_")),
         ("Anthropic API Key", concat!("sk-", "ant-")),
-        ("Private Key PEM Block", concat!("-----BEGIN ", "PRIVATE KEY-----")),
-        ("RSA Private Key PEM Block", concat!("-----BEGIN ", "RSA PRIVATE KEY-----")),
+        (
+            "Private Key PEM Block",
+            concat!("-----BEGIN ", "PRIVATE KEY-----"),
+        ),
+        (
+            "RSA Private Key PEM Block",
+            concat!("-----BEGIN ", "RSA PRIVATE KEY-----"),
+        ),
     ];
 
     for &(label, prefix) in PATTERNS {
@@ -144,7 +150,10 @@ mod tests {
 
         let repeated = "zerho-zero-node-rust-bundler;".repeat(200);
         let gz = compute_gzip_size(repeated.as_bytes());
-        assert!(gz < repeated.len() / 5, "gzip should compress repetitive JS strongly");
+        assert!(
+            gz < repeated.len() / 5,
+            "gzip should compress repetitive JS strongly"
+        );
     }
 
     #[test]

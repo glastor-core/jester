@@ -1,9 +1,9 @@
-use std::fmt;
-use std::path::{Path, PathBuf};
 use oxc_resolver::{
     ResolveOptions, Resolver as InnerOxcResolver, TsconfigDiscovery, TsconfigOptions,
     TsconfigReferences,
 };
+use std::fmt;
+use std::path::{Path, PathBuf};
 use zerho_core::{ModuleKind, ZerhoError, ZerhoResult};
 
 /// Output of module resolution.
@@ -65,15 +65,14 @@ impl OxcResolver {
                 "module".to_owned(),
                 "default".to_owned(),
             ],
-            main_fields: vec![
-                "browser".to_owned(),
-                "module".to_owned(),
-                "main".to_owned(),
-            ],
+            main_fields: vec!["browser".to_owned(), "module".to_owned(), "main".to_owned()],
             ..ResolveOptions::default()
         };
 
-        Self { root, inner: InnerOxcResolver::new(options) }
+        Self {
+            root,
+            inner: InnerOxcResolver::new(options),
+        }
     }
 }
 
@@ -113,13 +112,14 @@ impl Resolver for OxcResolver {
             normalized.to_owned()
         };
 
-        let resolution = self.inner.resolve(lookup_dir, &query).map_err(|err| {
-            ZerhoError::Resolve {
-                specifier: specifier.to_owned(),
-                importer: importer.map(Path::to_path_buf),
-                reason: err.to_string(),
-            }
-        })?;
+        let resolution =
+            self.inner
+                .resolve(lookup_dir, &query)
+                .map_err(|err| ZerhoError::Resolve {
+                    specifier: specifier.to_owned(),
+                    importer: importer.map(Path::to_path_buf),
+                    reason: err.to_string(),
+                })?;
 
         let path = resolution.full_path();
         let kind = ModuleKind::from_path(&path);
@@ -174,16 +174,26 @@ mod tests {
 }"#,
         )
         .expect("write tsconfig");
-        std::fs::write(dir.join("src/utils/math.ts"), "export const add = (a: number, b: number) => a + b;\n")
-            .expect("write math.ts");
-        std::fs::write(dir.join("src/main.ts"), "import { add } from '@/utils/math';\n")
-            .expect("write main.ts");
+        std::fs::write(
+            dir.join("src/utils/math.ts"),
+            "export const add = (a: number, b: number) => a + b;\n",
+        )
+        .expect("write math.ts");
+        std::fs::write(
+            dir.join("src/main.ts"),
+            "import { add } from '@/utils/math';\n",
+        )
+        .expect("write main.ts");
 
         let resolver = OxcResolver::new(&dir);
         let module = resolver
             .resolve("@/utils/math", Some(&dir.join("src/main.ts")))
             .expect("tsconfig @/* alias should resolve natively");
-        assert!(module.path.ends_with(Path::new("src").join("utils").join("math.ts")));
+        assert!(
+            module
+                .path
+                .ends_with(Path::new("src").join("utils").join("math.ts"))
+        );
         assert_eq!(module.kind, ModuleKind::Ts);
 
         let _ = std::fs::remove_dir_all(&dir);

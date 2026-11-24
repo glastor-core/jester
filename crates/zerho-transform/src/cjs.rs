@@ -1,10 +1,10 @@
-use std::collections::{BTreeMap, HashSet};
-use std::path::{Path, PathBuf};
 use oxc::allocator::Allocator;
 use oxc::ast::ast::{Argument, CallExpression, Expression};
 use oxc::ast_visit::Visit;
 use oxc::parser::Parser;
 use oxc::span::{SourceType, Span};
+use std::collections::{BTreeMap, HashSet};
+use std::path::{Path, PathBuf};
 use zerho_core::{ZerhoError, ZerhoResult};
 
 struct CjsRequireCollector {
@@ -99,7 +99,8 @@ pub fn prebundle_cjs_graph_to_esm(
 ) -> ZerhoResult<String> {
     let mut modules: BTreeMap<String, String> = BTreeMap::new();
     let mut visited: HashSet<PathBuf> = HashSet::new();
-    let mut queue: Vec<(PathBuf, String)> = vec![(entry_path.to_path_buf(), entry_source.to_owned())];
+    let mut queue: Vec<(PathBuf, String)> =
+        vec![(entry_path.to_path_buf(), entry_source.to_owned())];
 
     let entry_key = normalize_cjs_key(entry_path);
 
@@ -123,9 +124,7 @@ pub fn prebundle_cjs_graph_to_esm(
         modules.insert(normalize_cjs_key(&current_path), rewritten);
     }
 
-    let mut out = String::from(
-        "const __zerho_cjs_registry = {\n",
-    );
+    let mut out = String::from("const __zerho_cjs_registry = {\n");
     for (id, body) in &modules {
         let escaped_id = id.replace('\\', "\\\\").replace('"', "\\\"");
         out.push_str("  \"");

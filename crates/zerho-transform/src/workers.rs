@@ -1,10 +1,10 @@
-use std::collections::HashSet;
-use std::path::Path;
 use oxc::allocator::Allocator;
 use oxc::ast::ast::{Argument, Expression, NewExpression};
 use oxc::ast_visit::Visit;
 use oxc::parser::Parser;
 use oxc::span::{GetSpan, SourceType, Span};
+use std::collections::HashSet;
+use std::path::Path;
 use zerho_core::{ZerhoError, ZerhoResult};
 
 struct WorkerUrlCollector {
@@ -105,14 +105,16 @@ mod tests {
     #[test]
     fn collects_and_rewrites_web_worker_new_url_expressions() {
         let src = "const w = new Worker(new URL('./compute.worker.ts', import.meta.url), { type: 'module' });\n";
-        let urls = collect_web_worker_urls(src, Path::new("src/main.ts"))
-            .expect("collect worker urls");
+        let urls =
+            collect_web_worker_urls(src, Path::new("src/main.ts")).expect("collect worker urls");
         assert_eq!(urls, vec!["./compute.worker.ts"]);
 
         let rewritten = rewrite_web_worker_urls(src, Path::new("src/main.ts"), |spec| {
             (spec == "./compute.worker.ts").then(|| "/assets/worker-deadbeef.js".to_owned())
         })
         .expect("rewrite worker urls");
-        assert!(rewritten.contains("new Worker(\"/assets/worker-deadbeef.js\", { type: 'module' })"));
+        assert!(
+            rewritten.contains("new Worker(\"/assets/worker-deadbeef.js\", { type: 'module' })")
+        );
     }
 }

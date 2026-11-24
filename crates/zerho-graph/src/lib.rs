@@ -48,7 +48,10 @@ impl ModuleGraph {
         let new_imports: BTreeSet<ModuleId> = new_imports.into_iter().collect();
 
         let (changed, old_imports) = match self.nodes.get(&id) {
-            Some(existing) => (existing.hash != hash || existing.imports != new_imports, existing.imports.clone()),
+            Some(existing) => (
+                existing.hash != hash || existing.imports != new_imports,
+                existing.imports.clone(),
+            ),
             None => (true, BTreeSet::new()),
         };
 
@@ -130,7 +133,10 @@ impl ModuleGraph {
 
     pub fn stats(&self) -> GraphStats {
         let edge_count = self.nodes.values().map(|n| n.imports.len()).sum();
-        GraphStats { module_count: self.nodes.len(), edge_count }
+        GraphStats {
+            module_count: self.nodes.len(),
+            edge_count,
+        }
     }
 
     /// Returns a deterministic, path-sorted snapshot of all modules in the graph for `/__inspect`.
@@ -158,7 +164,13 @@ impl ModuleGraph {
 
         for start in ordered_ids {
             if state.get(&start).copied().unwrap_or(0) == 0 {
-                self.dfs_cycles(start, &mut state, &mut stack, &mut seen_signatures, &mut cycles);
+                self.dfs_cycles(
+                    start,
+                    &mut state,
+                    &mut stack,
+                    &mut seen_signatures,
+                    &mut cycles,
+                );
             }
         }
         cycles
@@ -238,7 +250,13 @@ mod tests {
 
         let invalidated = graph.invalidate(btn);
         assert_eq!(invalidated, vec![btn, app, entry]);
-        assert_eq!(graph.stats(), GraphStats { module_count: 3, edge_count: 2 });
+        assert_eq!(
+            graph.stats(),
+            GraphStats {
+                module_count: 3,
+                edge_count: 2
+            }
+        );
     }
 
     #[test]
@@ -247,12 +265,30 @@ mod tests {
         let app = ModuleId::from_specifier("src/App.tsx");
         let dep = ModuleId::from_specifier("src/dep.ts");
 
-        graph.upsert_module(dep, PathBuf::from("src/dep.ts"), ModuleKind::Ts, ContentHash::from_bytes(b"1"), []);
-        graph.upsert_module(app, PathBuf::from("src/App.tsx"), ModuleKind::Tsx, ContentHash::from_bytes(b"1"), [dep]);
+        graph.upsert_module(
+            dep,
+            PathBuf::from("src/dep.ts"),
+            ModuleKind::Ts,
+            ContentHash::from_bytes(b"1"),
+            [],
+        );
+        graph.upsert_module(
+            app,
+            PathBuf::from("src/App.tsx"),
+            ModuleKind::Tsx,
+            ContentHash::from_bytes(b"1"),
+            [dep],
+        );
         assert_eq!(graph.invalidate(dep), vec![dep, app]);
 
         // App stops importing dep.
-        graph.upsert_module(app, PathBuf::from("src/App.tsx"), ModuleKind::Tsx, ContentHash::from_bytes(b"2"), []);
+        graph.upsert_module(
+            app,
+            PathBuf::from("src/App.tsx"),
+            ModuleKind::Tsx,
+            ContentHash::from_bytes(b"2"),
+            [],
+        );
         assert_eq!(graph.invalidate(dep), vec![dep]);
     }
 
@@ -263,9 +299,27 @@ mod tests {
         let b = ModuleId::from_specifier("src/b.ts");
         let c = ModuleId::from_specifier("src/c.ts");
 
-        graph.upsert_module(a, PathBuf::from("src/a.ts"), ModuleKind::Ts, ContentHash::from_bytes(b"a"), [b]);
-        graph.upsert_module(b, PathBuf::from("src/b.ts"), ModuleKind::Ts, ContentHash::from_bytes(b"b"), [c]);
-        graph.upsert_module(c, PathBuf::from("src/c.ts"), ModuleKind::Ts, ContentHash::from_bytes(b"c"), [a]);
+        graph.upsert_module(
+            a,
+            PathBuf::from("src/a.ts"),
+            ModuleKind::Ts,
+            ContentHash::from_bytes(b"a"),
+            [b],
+        );
+        graph.upsert_module(
+            b,
+            PathBuf::from("src/b.ts"),
+            ModuleKind::Ts,
+            ContentHash::from_bytes(b"b"),
+            [c],
+        );
+        graph.upsert_module(
+            c,
+            PathBuf::from("src/c.ts"),
+            ModuleKind::Ts,
+            ContentHash::from_bytes(b"c"),
+            [a],
+        );
 
         let cycles = graph.find_cycles();
         assert_eq!(cycles.len(), 1);

@@ -227,7 +227,10 @@ pub struct CssConfig {
 
 impl Default for CssConfig {
     fn default() -> Self {
-        Self { modules: true, minify: true }
+        Self {
+            modules: true,
+            minify: true,
+        }
     }
 }
 
@@ -406,10 +409,14 @@ impl ZerhoConfig {
 
     pub fn validate(&self) -> ZerhoResult<()> {
         if self.project.name.trim().is_empty() {
-            return Err(ZerhoError::Config("`project.name` cannot be empty".to_owned()));
+            return Err(ZerhoError::Config(
+                "`project.name` cannot be empty".to_owned(),
+            ));
         }
         if self.server.port == 0 {
-            return Err(ZerhoError::Config("`server.port` must be between 1 and 65535".to_owned()));
+            return Err(ZerhoError::Config(
+                "`server.port` must be between 1 and 65535".to_owned(),
+            ));
         }
         Ok(())
     }
@@ -627,7 +634,11 @@ pub fn build_import_meta_env_json(
         format!("\"PROD\":{}", !is_dev),
     ];
     for (k, v) in vars {
-        entries.push(format!("\"{}\":\"{}\"", escape_json_str(k), escape_json_str(v)));
+        entries.push(format!(
+            "\"{}\":\"{}\"",
+            escape_json_str(k),
+            escape_json_str(v)
+        ));
     }
     format!("{{{}}}", entries.join(","))
 }
@@ -776,7 +787,10 @@ mod tests {
             "ZERHO_",
             &mut vars,
         );
-        assert_eq!(vars.get("ZERHO_API").map(String::as_str), Some("http://localhost:8080"));
+        assert_eq!(
+            vars.get("ZERHO_API").map(String::as_str),
+            Some("http://localhost:8080")
+        );
         assert_eq!(vars.get("ZERHO_FLAG").map(String::as_str), Some("1"));
         assert!(!vars.contains_key("SECRET_KEY"));
 

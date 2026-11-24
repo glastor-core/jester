@@ -1,0 +1,147 @@
+name: DevSecOps Audit (GLASTOR Core)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  specter:
+    name: Specter — API Contract & SemVer Guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run GLASTOR Specter AST Contract Audit
+        uses: glastor-core/specter@e1f16c27f34987429a1ba6a84d871fa1c79c79f1 # v1
+        with:
+          head-dir: "crates"
+          base-ref: "origin/main"
+          fail-on-breaking: "false"
+          fail-on-trojan: "true"
+          output-sarif: "specter-report.sarif"
+          output-sbom: "specter-sbom.cdx.json"
+          post-pr-comment: "true"
+
+      - name: Upload Specter SARIF
+        if: always() && hashFiles('specter-report.sarif') != ''
+        uses: github/codeql-action/upload-sarif@d2aacf54c2fbc910db8d7ec338fdb54ea48c692d # v3
+        with:
+          sarif_file: specter-report.sarif
+          category: specter-api-contract
+        continue-on-error: true
+
+  byte-gauge:
+    name: Byte-Gauge — Binary Hardening & Size Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      pull-requests: write
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # stable
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+
+      - name: Build release binary
+        run: cargo build --release -p zerho-cli
+
+      - name: Run GLASTOR Byte-Gauge Binary Audit
+        uses: glastor-core/byte-gauge@2a6fca514168a8e825925d94ad19ab6e4725e336 # v1
+        with:
+          file-path: "target/release/zerho"
+          max-size-mb: "25"
+          max-entropy: "7.5"
+          fail-on-debug: "false"
+          output-sarif: "byte-gauge-report.sarif"
+          output-sbom: "byte-gauge-sbom.cdx.json"
+          post-pr-comment: "true"
+
+      - name: Upload Byte-Gauge SARIF
+        if: always() && hashFiles('byte-gauge-report.sarif') != ''
+        uses: github/codeql-action/upload-sarif@d2aacf54c2fbc910db8d7ec338fdb54ea48c692d # v3
+        with:
+          sarif_file: byte-gauge-report.sarif
+          category: byte-gauge-binary-audit
+        continue-on-error: true
+
+  pii-veil:
+    name: pii-veil — DLP Secret & PII Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Run GLASTOR pii-veil DLP Scan
+        uses: glastor-core/pii-veil@5f31d0dbe4fd02fbc0edf395bd4dcd7571f52117 # v0.1.4
+        with:
+          path: "."
+          exclude: "crates/zerho-bundler/src/security.rs,target,website/node_modules,website/dist"
+          fail-on-detect: "true"
+
+  nemesis:
+    name: Nemesis — DevSecOps Hygiene & Compliance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run GLASTOR Nemesis Universal Auditor
+        uses: glastor-core/nemesis@a2fe3c680c81926ba2f277d9aba4e25045d47335 # v1
+        with:
+          target-path: "."
+          scan-secrets: "true"
+          scan-sast: "true"
+          scan-sca: "true"
+          scan-hygiene: "true"
+          scan-licenses: "true"
+          generate-sbom: "true"
+          require-license: "true"
+          fail-on-critical: "true"
+          fail-on-high: "false"
+          post-pr-comment: "true"
+          upload-sarif: "true"

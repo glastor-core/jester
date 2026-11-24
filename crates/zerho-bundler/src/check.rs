@@ -1,8 +1,8 @@
+use rayon::prelude::*;
 use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use rayon::prelude::*;
 use zerho_config::{ZerhoConfig, load_env_vars};
 use zerho_core::{ModuleId, ModuleKind, ZerhoError, ZerhoResult};
 use zerho_graph::ModuleGraph;
@@ -362,7 +362,12 @@ mod tests {
         let report = run_project_check(&cfg).expect("check should complete");
         assert_eq!(report.modules_checked, 2);
         assert_eq!(report.cycles.len(), 1);
-        assert!(report.issues.iter().any(|i| i.code == "circular-dependency"));
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| i.code == "circular-dependency")
+        );
         assert!(report.issues.iter().any(|i| i.code == "unresolved-import"));
         assert!(report.issues.iter().any(|i| i.code == "missing-env"));
         assert_eq!(report.error_count(), 1);

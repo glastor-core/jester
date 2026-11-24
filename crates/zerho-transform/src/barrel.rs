@@ -1,9 +1,9 @@
-use std::collections::BTreeMap;
-use std::path::Path;
 use oxc::allocator::Allocator;
 use oxc::ast::ast::{ImportDeclarationSpecifier, Statement};
 use oxc::parser::Parser;
 use oxc::span::{SourceType, Span};
+use std::collections::BTreeMap;
+use std::path::Path;
 use zerho_core::{ZerhoError, ZerhoResult};
 
 /// A single re-export entry inside a pure barrel file (`export { orig as exported } from './leaf'`).
@@ -129,8 +129,7 @@ pub fn rewrite_barrel_imports(
                 let mut named_parts = Vec::new();
                 for (orig, local) in items {
                     if orig == "default" {
-                        replacement_lines
-                            .push(format!("import {local} from \"{escaped_leaf}\";"));
+                        replacement_lines.push(format!("import {local} from \"{escaped_leaf}\";"));
                     } else if orig == local {
                         named_parts.push(local);
                     } else {
@@ -181,15 +180,22 @@ mod tests {
         assert_eq!(map["Modal"].original_name, "default");
 
         let entry_src = "import { Button, Modal as AppModal } from './components';\nconsole.log(Button, AppModal);\n";
-        let (rewritten, count) = rewrite_barrel_imports(entry_src, Path::new("src/main.ts"), |spec, sym| {
-            if spec == "./components" {
-                let entry = map.get(sym)?;
-                Some((format!("./components/{}", entry.source_specifier.trim_start_matches("./")), entry.original_name.clone()))
-            } else {
-                None
-            }
-        })
-        .expect("barrel rewrite should succeed");
+        let (rewritten, count) =
+            rewrite_barrel_imports(entry_src, Path::new("src/main.ts"), |spec, sym| {
+                if spec == "./components" {
+                    let entry = map.get(sym)?;
+                    Some((
+                        format!(
+                            "./components/{}",
+                            entry.source_specifier.trim_start_matches("./")
+                        ),
+                        entry.original_name.clone(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .expect("barrel rewrite should succeed");
 
         assert_eq!(count, 1);
         assert!(rewritten.contains("import { Button } from \"./components/Button\";"));
