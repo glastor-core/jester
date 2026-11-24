@@ -69,6 +69,10 @@ secret_scan = true           # fail build on leaked API keys / private keys
 optimize_svg = true          # pure-Rust SVG minification
 optimize_images = true       # pure-Rust PNG/JPG -> WebP conversion
 
+[plugins]
+# wasm = ["plugins/my-plugin.wasm"]  # sandboxed wasmtime plugins
+# fuel_limit = 1000000
+
 [build.lib]
 # entry = "src/index.ts"     # enables Library Mode (.mjs + .cjs)
 # name = "my-lib"

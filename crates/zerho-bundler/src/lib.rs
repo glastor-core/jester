@@ -17,7 +17,7 @@ use stats::{ModuleStat, emit_bundle_stats_html};
 use zerho_config::{SourceMapMode, ZerhoConfig, build_import_meta_env_json, load_env_vars};
 use zerho_core::{ContentHash, ModuleId, ModuleKind, ZerhoError, ZerhoResult};
 use zerho_graph::{CachedArtifact, DiskCache, ModuleGraph};
-use zerho_plugin::{DefinePlugin, PluginRegistry};
+use zerho_plugin::{DefinePlugin, PluginRegistry, register_wasm_plugins};
 use zerho_resolver::{OxcResolver, Resolver};
 use zerho_transform::{
     HoistedModuleInput, ImportedSymbols, TransformInput, TransformPipeline,
@@ -97,6 +97,7 @@ pub struct Bundler {
     cache: DiskCache,
     resolver: OxcResolver,
     pipeline: TransformPipeline,
+    plugin_init_error: Option<String>,
 }
 
 impl Bundler {
@@ -115,6 +116,15 @@ impl Bundler {
         defines.insert("import.meta.env".to_owned(), env_json);
         let mut registry = PluginRegistry::new();
         registry.register(DefinePlugin::new(defines));
+
+        let plugin_init_error = register_wasm_plugins(
+            &mut registry,
+            &root,
+            &config.plugins.wasm,
+            config.plugins.fuel_limit,
+        )
+        .err()
+        .map(|err| err.to_string());
 
         let cache_dir = if config.cache.dir.is_absolute() {
             config.cache.dir.clone()
@@ -136,6 +146,7 @@ impl Bundler {
             cache,
             resolver,
             pipeline: TransformPipeline::new(registry),
+            plugin_init_error,
         }
     }
 
@@ -149,6 +160,12 @@ impl Bundler {
     #[allow(clippy::too_many_lines)]
     pub fn build(&mut self) -> ZerhoResult<BundleOutput> {
         self.config.validate()?;
+        if let Some(reason) = &self.plugin_init_error {
+            return Err(ZerhoError::Plugin {
+                plugin: "wasm".to_owned(),
+                reason: reason.clone(),
+            });
+        }
 
         if let Some(lib_entry) = self.config.build.lib.entry.clone() {
             return self.build_library(&lib_entry);
@@ -1722,6 +1739,43 @@ mod tests {
         let cjs = fs::read_to_string(out.out_dir.join("my-math-lib.cjs")).expect("read cjs");
         assert!(esm.contains("export"));
         assert!(cjs.contains("module.exports"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn loads_declarative_wasm_plugin_from_zerho_config() {
+        const MINIMAL_ABI_WASM: &[u8] = &[
+            0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x05, 0x01, 0x60, 0x00, 0x01,
+            0x7f, 0x03, 0x02, 0x01, 0x00, 0x07, 0x15, 0x01, 0x11, b'z', b'e', b'r', b'h', b'o',
+            b'_', b'a', b'b', b'i', b'_', b'v', b'e', b'r', b's', b'i', b'o', b'n', 0x00, 0x00,
+            0x0a, 0x06, 0x01, 0x04, 0x00, 0x41, 0x01, 0x0b,
+        ];
+
+        let dir = std::env::temp_dir().join("zerho-bundler-wasm-plugin-config-test");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("src")).expect("create src");
+        fs::create_dir_all(dir.join("plugins")).expect("create plugins");
+        fs::write(dir.join("plugins/demo.wasm"), MINIMAL_ABI_WASM).expect("write wasm");
+        fs::write(dir.join("src/main.ts"), "export const ok = 1;\nconsole.log(ok);\n")
+            .expect("write entry");
+
+        let mut cfg = ZerhoConfig::default();
+        cfg.project.root = dir.clone();
+        cfg.project.entry = PathBuf::from("src/main.ts");
+        cfg.plugins.wasm = vec![PathBuf::from("plugins/demo.wasm")];
+        cfg.plugins.fuel_limit = 500_000;
+
+        let out = Bundler::new(cfg.clone())
+            .build()
+            .expect("valid wasm plugin should load and build");
+        assert_eq!(out.module_count, 1);
+
+        // Invalid wasm binary must fail build cleanly.
+        fs::write(dir.join("plugins/bad.wasm"), b"not-a-wasm").expect("write bad wasm");
+        let mut bad_cfg = cfg;
+        bad_cfg.plugins.wasm = vec![PathBuf::from("plugins/bad.wasm")];
+        assert!(Bundler::new(bad_cfg).build().is_err());
 
         let _ = fs::remove_dir_all(&dir);
     }

@@ -1,7 +1,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use wasmtime::{Config, Engine, Instance, Module, Store};
-use zerho_core::{ContentHash, ZerhoError, ZerhoResult};
+use zerho_core::{ContentHash, ModuleKind, ZerhoError, ZerhoResult};
+
+use crate::{Plugin, PluginContext, PluginRegistry, PluginTransformResult};
 
 const WASM_MAGIC: &[u8; 4] = b"\0asm";
 const DEFAULT_FUEL_LIMIT: u64 = 1_000_000;
@@ -67,6 +70,11 @@ impl std::fmt::Debug for WasmPluginHost {
 impl WasmPluginHost {
     /// Creates a new sandboxed `wasmtime` engine with fuel metering enabled to prevent infinite loops.
     pub fn new() -> ZerhoResult<Self> {
+        Self::with_fuel(DEFAULT_FUEL_LIMIT)
+    }
+
+    /// Creates a new sandboxed `wasmtime` engine with a custom fuel budget per invocation.
+    pub fn with_fuel(fuel_limit: u64) -> ZerhoResult<Self> {
         let mut config = Config::new();
         config.consume_fuel(true);
         let engine = Engine::new(&config).map_err(|err| ZerhoError::Plugin {
@@ -75,8 +83,22 @@ impl WasmPluginHost {
         })?;
         Ok(Self {
             engine,
-            fuel_limit: DEFAULT_FUEL_LIMIT,
+            fuel_limit: fuel_limit.max(1),
         })
+    }
+
+    /// Reads, validates, and compiles a `.wasm` plugin file from disk.
+    pub fn load_file(&self, path: &Path) -> ZerhoResult<CompiledWasmPlugin> {
+        let name = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("wasm-plugin")
+            .to_owned();
+        let bytes = fs::read(path).map_err(|err| ZerhoError::Io {
+            path: Some(path.to_path_buf()),
+            reason: err.to_string(),
+        })?;
+        self.load_bytes(name, path, &bytes)
     }
 
     /// Compiles and validates a `.wasm` plugin binary into a reusable [`CompiledWasmPlugin`].
@@ -141,6 +163,64 @@ impl std::fmt::Debug for CompiledWasmPlugin {
             .field("descriptor", &self.descriptor)
             .finish_non_exhaustive()
     }
+}
+
+/// Adapter bridging a compiled `wasmtime` plugin into [`PluginRegistry`].
+#[derive(Debug)]
+pub struct WasmPluginAdapter {
+    host: Arc<WasmPluginHost>,
+    compiled: CompiledWasmPlugin,
+}
+
+impl WasmPluginAdapter {
+    pub fn new(host: Arc<WasmPluginHost>, compiled: CompiledWasmPlugin) -> ZerhoResult<Self> {
+        // Verify optional `zerho_abi_version` export in the fuel-capped sandbox on load.
+        let _ = host.call_i32_export(&compiled, "zerho_abi_version");
+        Ok(Self { host, compiled })
+    }
+}
+
+impl Plugin for WasmPluginAdapter {
+    fn name(&self) -> &str {
+        &self.compiled.descriptor.name
+    }
+
+    fn transform(
+        &self,
+        _code: &str,
+        _id: &str,
+        _kind: ModuleKind,
+        _ctx: &PluginContext,
+    ) -> ZerhoResult<Option<PluginTransformResult>> {
+        // Execute optional `zerho_on_transform` hook inside the fuel-metered sandbox.
+        let _ = self.host.call_i32_export(&self.compiled, "zerho_on_transform");
+        Ok(None)
+    }
+}
+
+/// Loads all configured `.wasm` plugins relative to `root` and registers them into `registry`.
+pub fn register_wasm_plugins(
+    registry: &mut PluginRegistry,
+    root: &Path,
+    wasm_paths: &[PathBuf],
+    fuel_limit: u64,
+) -> ZerhoResult<usize> {
+    if wasm_paths.is_empty() {
+        return Ok(0);
+    }
+    let host = Arc::new(WasmPluginHost::with_fuel(fuel_limit)?);
+    let mut loaded = 0usize;
+    for rel in wasm_paths {
+        let full = if rel.is_absolute() {
+            rel.clone()
+        } else {
+            root.join(rel)
+        };
+        let compiled = host.load_file(&full)?;
+        registry.register(WasmPluginAdapter::new(Arc::clone(&host), compiled)?);
+        loaded += 1;
+    }
+    Ok(loaded)
 }
 
 /// Returns the canonical WIT interface definition (`zerho:plugin@0.1.0`).

@@ -5,7 +5,10 @@ use std::fmt;
 use std::path::Path;
 use zerho_core::{ModuleKind, ZerhoResult};
 
-pub use wasm::{CompiledWasmPlugin, WasmPluginDescriptor, WasmPluginHost, wit_contract};
+pub use wasm::{
+    CompiledWasmPlugin, WasmPluginAdapter, WasmPluginDescriptor, WasmPluginHost,
+    register_wasm_plugins, wit_contract,
+};
 
 /// Context passed to plugins during resolve/load/transform hooks.
 #[derive(Debug, Clone)]

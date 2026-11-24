@@ -14,6 +14,24 @@ pub struct ZerhoConfig {
     pub cache: CacheConfig,
     pub security: SecurityConfig,
     pub assets: AssetsConfig,
+    pub plugins: PluginsConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginsConfig {
+    /// Paths to sandboxed WebAssembly plugins (`.wasm`) loaded via `wasmtime`.
+    pub wasm: Vec<PathBuf>,
+    /// Execution fuel budget per WASM hook call to prevent infinite loops.
+    pub fuel_limit: u64,
+}
+
+impl Default for PluginsConfig {
+    fn default() -> Self {
+        Self {
+            wasm: Vec::new(),
+            fuel_limit: 1_000_000,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -351,6 +369,15 @@ impl ZerhoConfig {
                 ("assets", "optimize_images") => {
                     config.assets.optimize_images = parse_bool(value, line_no)?;
                 }
+                ("plugins", "wasm") => {
+                    config.plugins.wasm = parse_string_list(value, line_no)?
+                        .into_iter()
+                        .map(PathBuf::from)
+                        .collect();
+                }
+                ("plugins", "fuel_limit") => {
+                    config.plugins.fuel_limit = parse_u64(value, line_no)?;
+                }
                 _ => {
                     return Err(ZerhoError::Config(format!(
                         "line {line_no}: unknown key `{section}.{key}`"
@@ -441,6 +468,7 @@ impl ZerhoConfig {
 
     /// Emits a JSON Schema (Draft 2020-12) for IDE autocomplete & validation of `zerho.toml`
     /// across VS Code (Even Better TOML / Taplo), Cursor, Zed, `JetBrains`, and Neovim.
+    #[allow(clippy::too_many_lines)]
     pub fn json_schema() -> &'static str {
         r#"{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -534,6 +562,13 @@ impl ZerhoConfig {
       "properties": {
         "optimize_svg": { "type": "boolean", "default": true },
         "optimize_images": { "type": "boolean", "default": true }
+      }
+    },
+    "plugins": {
+      "type": "object",
+      "properties": {
+        "wasm": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "fuel_limit": { "type": "integer", "minimum": 1, "default": 1000000 }
       }
     }
   }

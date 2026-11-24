@@ -14,6 +14,7 @@ use tokio::sync::broadcast;
 use zerho_config::{ZerhoConfig, build_import_meta_env_json, load_env_vars};
 use zerho_core::{ModuleId, ModuleKind, ZerhoError, ZerhoResult};
 use zerho_graph::{CachedArtifact, DiskCache, ModuleGraph};
+use zerho_plugin::{PluginRegistry, register_wasm_plugins};
 use zerho_resolver::{OxcResolver, Resolver};
 use zerho_transform::{
     TransformInput, TransformPipeline, is_likely_commonjs, lower_esm_for_bundle, rewrite_imports,
@@ -74,6 +75,15 @@ impl DevServer {
             config.cache.remote_url.as_deref(),
             config.cache.remote_token.as_deref(),
         );
+        let mut registry = PluginRegistry::new();
+        if let Err(err) = register_wasm_plugins(
+            &mut registry,
+            &root,
+            &config.plugins.wasm,
+            config.plugins.fuel_limit,
+        ) {
+            eprintln!("zerho warning: failed to load WASM plugin: {err}");
+        }
         let resolver = OxcResolver::new(&root);
         let (hmr_tx, _) = broadcast::channel(64);
         let state = Arc::new(ServerState {
@@ -84,7 +94,7 @@ impl DevServer {
             graph: RwLock::new(ModuleGraph::new()),
             cache,
             resolver,
-            pipeline: TransformPipeline::default(),
+            pipeline: TransformPipeline::new(registry),
             hmr_tx,
         });
         Self { state }
