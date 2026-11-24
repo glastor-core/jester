@@ -21,9 +21,9 @@ use zerho_graph::{CachedArtifact, DiskCache, ModuleGraph};
 use zerho_plugin::{PluginRegistry, register_wasm_plugins};
 use zerho_resolver::{OxcResolver, Resolver};
 use zerho_transform::{
-    TransformInput, TransformPipeline, is_likely_commonjs, lower_esm_for_bundle,
-    prebundle_cjs_graph_to_esm, rewrite_imports, wrap_cjs_as_esm, wrap_css_as_hmr_module,
-    wrap_css_with_exports_as_hmr_module,
+    TransformInput, TransformPipeline, inline_css_imports, is_likely_commonjs,
+    lower_esm_for_bundle, prebundle_cjs_graph_to_esm, rewrite_imports, wrap_cjs_as_esm,
+    wrap_css_as_hmr_module, wrap_css_with_exports_as_hmr_module,
 };
 
 const INSPECT_HTML: &str = include_str!("inspect.html");
@@ -782,7 +782,7 @@ async fn serve_module(
             .and_then(|n| n.to_str())
             .is_some_and(|name| name.ends_with(".module.css"))
     {
-        return serve_css_module(&state, canonical, &clean_specifier, source);
+        return serve_css_module(&state, canonical, &clean_specifier, &source);
     }
 
     let artifact = match transform_with_cache(&state, &canonical, kind, source) {
@@ -873,16 +873,31 @@ fn rewrite_dev_script(
     })
 }
 
+fn expand_dev_css_imports(state: &ServerState, path: &Path, source: &str) -> String {
+    inline_css_imports(source, path, |spec, current| {
+        let resolved = state
+            .resolver
+            .resolve(spec, Some(current))
+            .ok()
+            .map(|r| r.path)
+            .or_else(|| current.parent().map(|dir| dir.join(spec)))?;
+        let canonical = resolved.canonicalize().unwrap_or(resolved);
+        let text = std::fs::read_to_string(&canonical).ok()?;
+        Some((canonical, text))
+    })
+}
+
 fn serve_css_module(
     state: &ServerState,
     canonical: PathBuf,
     clean_specifier: &str,
-    source: String,
+    source: &str,
 ) -> Response {
+    let expanded = expand_dev_css_imports(state, &canonical, source);
     match state.pipeline.transform(&TransformInput {
         path: canonical.clone(),
         kind: ModuleKind::Css,
-        source,
+        source: expanded,
         framework: state.config.project.framework,
         is_dev: true,
         minify_css: false,
@@ -912,6 +927,11 @@ fn transform_with_cache(
     kind: ModuleKind,
     source: String,
 ) -> ZerhoResult<CachedArtifact> {
+    let source = if kind == ModuleKind::Css {
+        expand_dev_css_imports(state, path, &source)
+    } else {
+        source
+    };
     let key = DiskCache::compute_key(
         &source,
         module_kind_tag(kind),
