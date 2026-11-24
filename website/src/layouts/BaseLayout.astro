@@ -11,7 +11,7 @@ const {
   description = 'Zero-Node, 100% Rust frontend dev server and production bundler shipped as a single 16.60 MB native binary.',
 } = Astro.props;
 
-const canonicalURL = new URL(Astro.url.pathname, Astro.site ?? 'https://zerho.dev');
+const canonicalURL = new URL(Astro.url.pathname, Astro.site ?? 'https://zerho.xyz');
 const currentPath = Astro.url.pathname;
 
 const jsonLd = {
@@ -22,6 +22,11 @@ const jsonLd = {
   operatingSystem: 'Windows, macOS, Linux',
   softwareVersion: '0.7.0',
   license: 'https://opensource.org/licenses/MIT',
+  author: {
+    '@type': 'Person',
+    name: 'glastor-dev',
+    url: 'https://glastor.es/',
+  },
   description,
   url: canonicalURL.toString(),
 };
@@ -108,11 +113,13 @@ const jsonLd = {
       <div class="container footer-inner">
         <div>
           <strong style="color: #ffffff; font-family: var(--font-display);">zerho</strong>
-          <span> — Zero-Node, 100% Rust frontend dev server &amp; production bundler.</span>
+          <span> — Zero-Node, 100% Rust frontend dev server &amp; production bundler · by </span>
+          <a href="https://glastor.es/" target="_blank" rel="noopener noreferrer" style="color: #f97316; font-weight: 600;">glastor.es</a>
         </div>
         <div class="footer-meta">
-          <span>Rust Edition 2024</span>
-          <span>unsafe_code = "forbid"</span>
+          <a href="https://pii-veil.glastor.es/" target="_blank" rel="noopener noreferrer">pii-veil</a>
+          <a href="https://specter.glastor.es/" target="_blank" rel="noopener noreferrer">specter</a>
+          <span>100% Safe Rust</span>
           <span>MIT OR Apache-2.0</span>
         </div>
       </div>
