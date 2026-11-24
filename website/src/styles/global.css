@@ -193,6 +193,18 @@ code, pre, kbd {
   background: rgba(255, 255, 255, 0.05);
 }
 
+.nav-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: rgba(17, 24, 39, 0.65);
+}
+
+.nav-github:hover {
+  border-color: var(--border-strong);
+}
+
 .nav-cta {
   display: inline-flex;
   align-items: center;
@@ -353,6 +365,250 @@ a:focus-visible {
   justify-content: center;
   gap: 12px;
   margin-bottom: 28px;
+}
+
+/* Install Switcher + Hero Terminal Preview */
+.install-widget {
+  max-width: 740px;
+  margin: 0 auto;
+  text-align: left;
+  background: #0b111c;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: 0 20px 44px -24px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(249, 115, 22, 0.08);
+  overflow: hidden;
+}
+
+.install-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: #0f1726;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.install-tab {
+  padding: 5px 11px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.14s ease, background 0.14s ease, border-color 0.14s ease;
+}
+
+.install-tab:hover {
+  color: #ffffff;
+}
+
+.install-tab[aria-selected="true"] {
+  color: var(--accent-bright);
+  background: var(--accent-dim);
+  border-color: var(--accent-border);
+}
+
+.install-cmd-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px 13px 18px;
+}
+
+.install-cmd-row[hidden] {
+  display: none;
+}
+
+.hero-terminal {
+  max-width: 740px;
+  margin: 20px auto 0;
+  text-align: left;
+  background: #070b12;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.terminal-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: #0d1421;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-dim);
+}
+
+.terminal-dots {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.terminal-dots i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #273244;
+}
+
+.terminal-body {
+  margin: 0;
+  padding: 14px 18px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.65;
+  color: #cbd5e1;
+  overflow-x: auto;
+}
+
+.t-accent { color: var(--accent-bright); font-weight: 600; }
+.t-green { color: var(--green); }
+.t-dim { color: var(--text-dim); }
+
+/* Visual Comparison Bars (esbuild/Rspack style, pure CSS) */
+.bar-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-bottom: 28px;
+  padding: 24px;
+  background: rgba(15, 21, 34, 0.7);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.bar-group h3 {
+  font-size: 0.98rem;
+  margin-bottom: 4px;
+}
+
+.bar-group-sub {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+}
+
+.bar-row {
+  margin-bottom: 12px;
+}
+
+.bar-row:last-child {
+  margin-bottom: 0;
+}
+
+.bar-label-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  margin-bottom: 5px;
+}
+
+.bar-track {
+  width: 100%;
+  height: 10px;
+  background: #0b111c;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.bar-fill-accent {
+  background: linear-gradient(90deg, #f97316, #fb923c);
+}
+
+.bar-fill-green {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.bar-fill-muted {
+  background: #334155;
+}
+
+/* Migrate from Vite Side-by-Side */
+.migrate-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+
+.migrate-grid .code-block {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.migrate-grid .code-block pre {
+  flex: 1;
+}
+
+.migrate-tag {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.migrate-tag-before {
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.migrate-tag-after {
+  color: var(--green);
+  background: var(--green-dim);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+/* Radical Honesty Fit Strip */
+.fit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 32px;
+  padding: 28px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.fit-col h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.05rem;
+  margin-bottom: 12px;
+}
+
+.fit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.fit-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 
 /* Copyable CLI box */
@@ -961,7 +1217,10 @@ td:first-child {
   }
   .pillar-panel,
   .arch-split,
-  .bench-grid {
+  .bench-grid,
+  .bar-compare-grid,
+  .migrate-grid,
+  .fit-grid {
     grid-template-columns: 1fr;
     gap: 24px;
   }
