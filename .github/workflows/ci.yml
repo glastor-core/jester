@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -16,6 +20,7 @@ jobs:
   check:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -23,15 +28,17 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # stable
         with:
           components: clippy, rustfmt
 
       - name: Cache Cargo artifacts
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
 
       - name: Clippy (pedantic)
         run: cargo clippy --workspace --all-targets -- -D warnings
@@ -42,8 +49,9 @@ jobs:
       - name: Build release binary
         run: cargo build --release -p zerho-cli
 
-      - name: Smoke test production builds
+      - name: Smoke test check and production builds
         shell: bash
         run: |
-          ./target/release/zerho build --config examples/basic-ts/zerho.toml
+          ./target/release/zerho check --config examples/basic-ts/zerho.toml
+          ./target/release/zerho build --config examples/basic-ts/zerho.toml --analyze
           ./target/release/zerho build --config examples/react-tsx/zerho.toml

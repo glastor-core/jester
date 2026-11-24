@@ -965,6 +965,13 @@ async fn forward_http_proxy(target_base: &str, req_path: &str, request: Request)
         .uri()
         .query()
         .map_or_else(String::new, |q| format!("?{q}"));
+    if req_path.contains('\r')
+        || req_path.contains('\n')
+        || query.contains('\r')
+        || query.contains('\n')
+    {
+        return (StatusCode::BAD_REQUEST, "invalid proxy request URI").into_response();
+    }
     let raw_req = format!(
         "{method} {req_path}{query} HTTP/1.1\r\nHost: {host_port}\r\nConnection: close\r\n\r\n"
     );
@@ -1081,5 +1088,46 @@ mod tests {
 
         let err_mod = render_error_overlay_module("/src/main.tsx", "Unexpected token `;`");
         assert!(err_mod.contains("showErrorOverlay(\"/src/main.tsx\", \"Unexpected token `;`\")"));
+
+        let refresh = inject_hmr_preamble("/src/App.tsx", "$RefreshReg$(App, \"App\");");
+        assert!(refresh.contains("window.$RefreshReg$"));
+        assert!(refresh.contains("import.meta.hot.accept()"));
+    }
+
+    #[tokio::test]
+    async fn preview_server_blocks_path_traversal_and_serves_brotli() {
+        let dir = std::env::temp_dir().join("zerho-server-security-br-test");
+        let dist = dir.join("dist");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dist).expect("create dist");
+        std::fs::write(dir.join("secret.txt"), "TOP_SECRET_OUTSIDE_DIST").expect("write secret");
+        std::fs::write(dist.join("app.js"), "console.log('plain');").expect("write app.js");
+        std::fs::write(dist.join("app.js.br"), b"FAKE_BROTLI_BYTES").expect("write app.js.br");
+
+        let dist_canon = dist.canonicalize().expect("canon dist");
+
+        // 1. Path traversal attempt outside dist_root must be rejected (403 Forbidden).
+        let traversal = serve_static_file(&dist_canon, &dist_canon.join("../secret.txt"), false).await;
+        assert_eq!(traversal.status(), StatusCode::FORBIDDEN);
+
+        // 2. Client accepting Brotli receives pre-compressed .br with Content-Encoding: br.
+        let mut br_headers = axum::http::HeaderMap::new();
+        br_headers.insert(
+            header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip, deflate, br"),
+        );
+        assert!(accepts_brotli(&br_headers));
+        let br_resp = serve_static_file(&dist_canon, &dist_canon.join("app.js"), true).await;
+        assert_eq!(br_resp.status(), StatusCode::OK);
+        assert_eq!(
+            br_resp.headers().get(header::CONTENT_ENCODING).and_then(|v| v.to_str().ok()),
+            Some("br")
+        );
+        assert_eq!(
+            br_resp.headers().get(header::VARY).and_then(|v| v.to_str().ok()),
+            Some("Accept-Encoding")
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

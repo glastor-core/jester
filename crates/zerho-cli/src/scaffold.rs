@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use zerho_config::ZerhoConfig;
 use zerho_core::{ZerhoError, ZerhoResult};
 
 /// Available built-in zero-Node project templates for `zerho init`.
@@ -59,7 +60,8 @@ fn scaffold_basic_ts(root: &Path, name: &str, created: &mut Vec<PathBuf>) -> Zer
         root,
         "zerho.toml",
         &format!(
-            "[project]\n\
+            "#:schema ./zerho.schema.json\n\n\
+             [project]\n\
              name = \"{name}\"\n\
              root = \".\"\n\
              entry = \"src/main.ts\"\n\
@@ -100,6 +102,9 @@ fn scaffold_basic_ts(root: &Path, name: &str, created: &mut Vec<PathBuf>) -> Zer
         &render_html(name, "/src/main.ts", "app"),
         created,
     )?;
+    write_file(root, "zerho.schema.json", ZerhoConfig::json_schema(), created)?;
+    write_file(root, "tsconfig.json", TSCONFIG_JSON, created)?;
+    write_file(root, "src/zerho-env.d.ts", ZERHO_ENV_DTS, created)?;
     write_file(root, "src/styles.css", BASE_CSS, created)?;
     write_file(root, "src/counter.ts", BASIC_COUNTER_TS, created)?;
     write_file(root, "src/main.ts", BASIC_MAIN_TS, created)?;
@@ -111,7 +116,8 @@ fn scaffold_react_tsx(root: &Path, name: &str, created: &mut Vec<PathBuf>) -> Ze
         root,
         "zerho.toml",
         &format!(
-            "[project]\n\
+            "#:schema ./zerho.schema.json\n\n\
+             [project]\n\
              name = \"{name}\"\n\
              root = \".\"\n\
              entry = \"src/main.tsx\"\n\
@@ -152,6 +158,9 @@ fn scaffold_react_tsx(root: &Path, name: &str, created: &mut Vec<PathBuf>) -> Ze
         &render_html(name, "/src/main.tsx", "root"),
         created,
     )?;
+    write_file(root, "zerho.schema.json", ZerhoConfig::json_schema(), created)?;
+    write_file(root, "tsconfig.json", TSCONFIG_JSON, created)?;
+    write_file(root, "src/zerho-env.d.ts", ZERHO_ENV_DTS, created)?;
     write_file(root, "src/styles.css", BASE_CSS, created)?;
     write_file(root, "src/lazy-panel.tsx", REACT_LAZY_TSX, created)?;
     write_file(root, "src/main.tsx", REACT_MAIN_TSX, created)?;
@@ -202,6 +211,80 @@ fn render_html(title: &str, entry_src: &str, mount_id: &str) -> String {
          </html>\n"
     )
 }
+
+const TSCONFIG_JSON: &str = r#"{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  },
+  "include": ["src"]
+}
+"#;
+
+const ZERHO_ENV_DTS: &str = r#"/// <reference types="zerho/client" />
+
+interface ImportMetaEnv {
+  readonly MODE: string;
+  readonly DEV: boolean;
+  readonly PROD: boolean;
+  readonly [key: string]: string | boolean | undefined;
+}
+
+interface ImportMetaHot {
+  readonly data: Record<string, unknown>;
+  accept(cb?: (mod: unknown) => void): void;
+  dispose(cb: (data: Record<string, unknown>) => void): void;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+  readonly hot?: ImportMetaHot;
+}
+
+declare module "*.module.css" {
+  const classes: { readonly [key: string]: string };
+  export default classes;
+}
+
+declare module "*.css" {
+  const css: string;
+  export default css;
+}
+
+declare module "*.svg" {
+  const src: string;
+  export default src;
+}
+
+declare module "*.png" {
+  const src: string;
+  export default src;
+}
+
+declare module "*.jpg" {
+  const src: string;
+  export default src;
+}
+
+declare module "*.jpeg" {
+  const src: string;
+  export default src;
+}
+
+declare module "*.webp" {
+  const src: string;
+  export default src;
+}
+"#;
 
 const LOGO_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <rect width="64" height="64" rx="14" fill="#111827"/>

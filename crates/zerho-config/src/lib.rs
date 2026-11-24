@@ -439,7 +439,8 @@ impl ZerhoConfig {
         out
     }
 
-    /// Emits a JSON Schema (Draft 2020-12) for IDE autocomplete & validation of `zerho.toml`.
+    /// Emits a JSON Schema (Draft 2020-12) for IDE autocomplete & validation of `zerho.toml`
+    /// across VS Code (Even Better TOML / Taplo), Cursor, Zed, `JetBrains`, and Neovim.
     pub fn json_schema() -> &'static str {
         r#"{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -464,6 +465,7 @@ impl ZerhoConfig {
         "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 5173 },
         "hmr": { "type": "boolean", "default": true },
         "open": { "type": "boolean", "default": false },
+        "partial_bundling": { "type": "boolean", "default": true },
         "proxy": {
           "type": "object",
           "additionalProperties": { "type": "string" }
@@ -479,7 +481,28 @@ impl ZerhoConfig {
         "target": { "type": "string", "default": "es2022" },
         "splitting": { "type": "boolean", "default": true },
         "brotli": { "type": "boolean", "default": true },
-        "scope_hoisting": { "type": "boolean", "default": true }
+        "scope_hoisting": { "type": "boolean", "default": true },
+        "analyze": { "type": "boolean", "default": false },
+        "budgets": {
+          "type": "object",
+          "properties": {
+            "max_js_kb": { "type": "integer", "minimum": 1 },
+            "max_css_kb": { "type": "integer", "minimum": 1 },
+            "max_chunk_kb": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "lib": {
+          "type": "object",
+          "properties": {
+            "entry": { "type": "string" },
+            "name": { "type": "string" },
+            "formats": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["es", "esm", "cjs"] },
+              "default": ["es", "cjs"]
+            }
+          }
+        }
       }
     },
     "css": {
@@ -496,6 +519,21 @@ impl ZerhoConfig {
         "dir": { "type": "string", "default": ".zerho/cache" },
         "remote_url": { "type": "string" },
         "remote_token": { "type": "string" }
+      }
+    },
+    "security": {
+      "type": "object",
+      "properties": {
+        "sri": { "type": "boolean", "default": true },
+        "csp": { "type": "boolean", "default": true },
+        "secret_scan": { "type": "boolean", "default": true }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "properties": {
+        "optimize_svg": { "type": "boolean", "default": true },
+        "optimize_images": { "type": "boolean", "default": true }
       }
     }
   }
@@ -707,6 +745,20 @@ mod tests {
     fn emits_json_schema() {
         let schema = ZerhoConfig::json_schema();
         assert!(schema.contains("json-schema.org/draft/2020-12/schema"));
-        assert!(schema.contains("\"proxy\""));
+        for key in [
+            "\"proxy\"",
+            "\"partial_bundling\"",
+            "\"brotli\"",
+            "\"scope_hoisting\"",
+            "\"analyze\"",
+            "\"budgets\"",
+            "\"lib\"",
+            "\"remote_url\"",
+            "\"security\"",
+            "\"assets\"",
+            "\"optimize_images\"",
+        ] {
+            assert!(schema.contains(key), "JSON schema missing {key}");
+        }
     }
 }
