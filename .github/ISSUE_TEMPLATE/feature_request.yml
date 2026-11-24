@@ -1,13 +1,13 @@
-name: "✨ Solicitud de Funcionalidad"
-description: "Propón un nuevo detector regional, conector de streaming o mejora para GLASTOR® pii-veil"
+name: "Solicitud de Funcionalidad"
+description: "Propón una nueva capacidad del compilador, bundler, dev server o ecosistema WASM para GLASTOR® zerho"
 title: "[Feature]: "
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        ¡Gracias por tu iniciativa para hacer de **GLASTOR® pii-veil** un motor DLP y de anonimización reversible aún más rápido, completo y ergonómico!
-        Priorizamos propuestas con algoritmos de validación matemática (dígitos verificadores para cero falsos positivos), streaming en memoria constante $O(1)$ e integraciones para agentes de IA y bases de datos.
+        ¡Gracias por ayudar a evolucionar **GLASTOR® zerho** (`glastor-core/jester`)!
+        Priorizamos propuestas 100% nativas en Rust (`unsafe_code = "forbid"`), sin dependencias de Node.js y con impacto medible en DX o rendimiento.
 
   - type: dropdown
     id: category
@@ -15,13 +15,13 @@ body:
       label: "Área o Módulo Principal"
       description: "Selecciona el área técnica donde encaja esta propuesta."
       options:
-        - "Nuevo Detector de Identidad Regional / Financiero (con checksum)"
-        - "Nuevo Detector de Secretos Cloud / API Keys"
-        - "Formatos de Streaming de Datos (SQL, CSV, Parquet, Logs)"
-        - "Servidor MCP (veil mcp) y Herramientas para Agentes"
-        - "Proxy HTTP/SSE (veil proxy) para Proveedores LLM"
-        - "Persistencia y Cifrado de Vault (Redis, Postgres, KMS)"
-        - "SDKs y Bindings (Rust, Python, Node.js, Go, C-ABI)"
+        - "Compilador & Assets (oxc, lightningcss, WebP, SVG, Workers, .wasm)"
+        - "Dev Server & HMR (Fast Refresh, /__inspect, Proxy, Partial Bundling)"
+        - "Bundler & Targets (Scope Hoisting, MPA, Library Mode, Edge SSR)"
+        - "Caché & Rendimiento (redb, Remote Team Cache, rayon)"
+        - "Plugins WASM (wasmtime, WIT zerho:plugin@0.1.0)"
+        - "Migración & CLI (zerho migrate, zerho check, zerho bench)"
+        - "Seguridad (SRI, CSP, Secret Guard, Budgets)"
         - "Otro"
     validations:
       required: true
@@ -29,9 +29,9 @@ body:
   - type: textarea
     id: problem
     attributes:
-      label: "Problema o Necesidad"
-      description: "¿Qué caso de uso o requisito de cumplimiento (GDPR, HIPAA, PCI-DSS, SOC2) busca resolver esta propuesta?"
-      placeholder: "Al anonimizar dumps SQL o prompts con documentos de identidad de Brasil (CPF/CNPJ)..."
+      label: "Problema o Caso de Uso"
+      description: "¿Qué necesidad real o brecha frente a Vite/Rspack/esbuild resuelve esta propuesta?"
+      placeholder: "Al migrar una app React + TypeScript con..."
     validations:
       required: true
 
@@ -39,8 +39,8 @@ body:
     id: proposal
     attributes:
       label: "Propuesta de Solución"
-      description: "¿Cómo debería funcionar en pii-veil? Incluye el formato o algoritmo de dígito verificador sugerido."
-      placeholder: "Proponemos añadir el validador Módulo-11 para CPF brasileño junto con su generador sintético determinista..."
+      description: "¿Cómo debería configurarse en zerho.toml o ejecutarse en el CLI?"
+      placeholder: "Añadir opción `[build].target` o flag CLI..."
     validations:
       required: true
 
@@ -48,4 +48,4 @@ body:
     id: context
     attributes:
       label: "Contexto Adicional / Especificaciones"
-      description: "Enlaces a estándares oficiales (ISO, RFC), normativas o benchmarks preliminares."
+      description: "Enlaces a RFCs, especificaciones web o benchmarks de referencia."

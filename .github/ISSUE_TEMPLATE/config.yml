@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Preguntas y soporte
-    url: https://github.com/glastor-core/pii-veil/discussions
-    about: Usa Discussions para preguntas generales, soporte, reglas personalizadas y dudas de integración.
+    url: https://github.com/glastor-core/jester/discussions
+    about: Usa Discussions para preguntas generales, migración desde Vite, plugins WASM y soporte.
   - name: Reporte de seguridad
-    url: https://github.com/glastor-core/pii-veil/security/policy
+    url: https://github.com/glastor-core/jester/security/policy
     about: Para vulnerabilidades, sigue la política de seguridad confidencial.

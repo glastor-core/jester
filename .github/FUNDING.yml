@@ -1,4 +1,4 @@
-# FUNDING.yml - GLASTOR® pii-veil
+# FUNDING.yml — GLASTOR® zerho (glastor-core/jester)
 # Configuración de patrocinio y sostenibilidad para GitHub.
 
 # GitHub Sponsors
@@ -13,4 +13,5 @@ open_collective: datagroupssl
 custom:
   - https://paypal.me/datagroupssl
   - https://opencollective.com/datagroupssl
-  - https://glastor.io
+  - https://zerho.xyz
+  - https://glastor.es

@@ -1,6 +1,6 @@
-# Contributing to GLASTOR Core pii-veil
+# Contributing to GLASTOR® zerho
 
-Thank you for your interest in contributing to **GLASTOR Core pii-veil**! We build ultrafast, deterministic, and reversible data loss prevention (DLP) engines, MCP servers, and privacy proxies in Rust, WebAssembly, Go, Python, and Node.js.
+Thank you for your interest in contributing to **GLASTOR® zerho** (`https://github.com/glastor-core/jester`)! We build a Zero-Node, 100% Safe Rust frontend dev server and production bundler powered by `oxc`, `lightningcss`, `redb`, `blake3`, and `wasmtime`.
 
 This document provides clear engineering guidelines to ensure smooth, high-signal collaboration.
 
@@ -9,7 +9,7 @@ This document provides clear engineering guidelines to ensure smooth, high-signa
 ## Code of Conduct & Governance
 
 - All contributors are expected to uphold our [Code of Conduct](CODE_OF_CONDUCT.md). Please report any violations confidentially to [`founder@glastor.es`](mailto:founder@glastor.es).
-- For security vulnerabilities or DLP redaction bypasses, **never open a public issue**—follow our [Security Policy](SECURITY.md).
+- For security vulnerabilities (path traversal, WASM sandbox escapes, SRI/CSP bypasses, secret-scan evasion), **never open a public issue**—follow our [Security Policy](SECURITY.md).
 - Review our [Support Guidelines](SUPPORT.md) for architecture discussions and community forums.
 
 ---
@@ -17,14 +17,14 @@ This document provides clear engineering guidelines to ensure smooth, high-signa
 ## Finding Work, Reporting Bugs & Proposing Changes
 
 - **First-Time Contributors:** Look for issues labeled `good first issue` or `help wanted`. Comment on the issue to claim it before starting work.
-- **Reporting Bugs:** Open an issue with exact reproduction steps, operating system, `veil --version`, and expected vs. actual behavior. **Never include real PII, credentials, or production secrets in issues**—always use synthetic mock data.
-- **Architecture RFCs & New Detectors:** Before starting large refactors, adding regional ID checksum algorithms, or altering public APIs, open a **GitHub Discussion** first to align on design and scope with maintainers.
+- **Reporting Bugs:** Open an issue with minimal reproduction steps, operating system, `zerho --version`, and expected vs. actual behavior. **Never include real credentials or production secrets in issues.**
+- **Architecture RFCs:** Before starting large refactors or altering public traits/WIT contracts (`zerho:plugin@0.1.0`), open a **GitHub Discussion** first to align on design and scope.
 
 ---
 
 ## Development Workflow
 
-We follow a structured Git branching model and enforce linear history via GitHub Pull Requests:
+We follow a structured Git branching model and enforce linear history via GitHub Pull Requests against `main`:
 
 ```text
 main (production-ready, releases)
@@ -34,18 +34,17 @@ main (production-ready, releases)
 ```
 
 ### 1. Prerequisites
-- **Rust:** Stable 1.80+ (`rustup`, `cargo`, `rustfmt`, `clippy`).
-- **Go** *(optional, for `sdks/go`)*: 1.22+.
-- **Node.js** *(optional, for `web/` and `crates/veil-node`)*: 20 LTS+.
-- **Python** *(optional, for `crates/veil-py`)*: 3.9+ with `maturin`.
+- **Rust:** Stable **1.95+** (Edition 2024, `rustup`, `cargo`, `rustfmt`, `clippy`).
+- **WASM target** *(optional, for `examples/wasm-plugin`)*: `rustup target add wasm32-unknown-unknown`.
+- **Node.js** *(optional, only for building the Astro landing site in `website/`)*: 22 LTS+.
 
 ### 2. Fork, Clone & Branch
 
 ```bash
-git clone https://github.com/<your-username>/pii-veil.git
-cd pii-veil
-git remote add upstream https://github.com/glastor-core/pii-veil.git
-git checkout -b feat/my-detector-enhancement
+git clone https://github.com/<your-username>/jester.git
+cd jester
+git remote add upstream https://github.com/glastor-core/jester.git
+git checkout -b feat/my-bundler-enhancement
 ```
 
 ### 3. Local Verification & Quality Gates
@@ -53,34 +52,34 @@ git checkout -b feat/my-detector-enhancement
 All contributions must pass local quality gates prior to opening a PR:
 
 ```bash
-# Build the complete Rust workspace
-cargo build --workspace --all-targets
-
-# Run the complete test suite (including multi-thousand iteration fuzz smoke test)
-cargo test --workspace
-
 # Verify strict formatting
 cargo fmt --all -- --check
 
-# Enforce zero Clippy warnings
+# Enforce zero Clippy pedantic warnings (unsafe_code = "forbid")
 cargo clippy --workspace --all-targets -- -D warnings
 
-# Run Go SDK tests (if touching sdks/go)
-cd sdks/go && go test -v -race ./...
+# Run the complete workspace test suite (60+ unit & integration tests)
+cargo test --workspace
+
+# Build release binary & run reproducible benchmark smoke test
+cargo build --release -p zerho-cli
+./target/release/zerho bench --synthetic 20 --json
+
+# Build Astro website (if touching website/)
+npm --prefix website run build
 ```
 
 ---
 
 ## Commit Message Conventions
 
-We enforce [Conventional Commits](COMMIT_CONVENTION.md) to ensure automated changelog generation and SemVer tracking:
+We enforce [Conventional Commits](COMMIT_CONVENTION.md) for automated changelog generation, SemVer tracking, and **GLASTOR® Specter** verification:
 
-- `feat(detector)`: Add new entity detector or checksum validator
-- `fix(vault)`: Fix token reconstitution or vault boundary issue
-- `perf(core)`: Optimize Aho-Corasick automaton or SIMD scanning
-- `docs(web)`: Documentation, architecture whitepapers, or landing page updates
-- `test(fuzz)`: Fuzzing targets or edge-case regression suites
-- `refactor(cli)`: Internal restructuring without API change
+- `feat(bundler)`: New bundler capability (SSR, MPA, Web Workers, `.wasm`)
+- `fix(server)`: Fix HMR invalidation, proxy, or `/__inspect` issue
+- `perf(transform)`: Optimize `oxc` transforms, Scope Hoisting, or CJS pre-bundling
+- `docs(website)`: Documentation or `zerho.xyz` landing page updates
+- `ci`: GitHub Actions or Dependabot updates
 
 ---
 
@@ -89,12 +88,12 @@ We enforce [Conventional Commits](COMMIT_CONVENTION.md) to ensure automated chan
 Before requesting review from maintainers ([CODEOWNERS](CODEOWNERS)):
 
 - [ ] Branch is rebased against the latest `upstream/main`.
-- [ ] No real PII, tokens, or live credentials exist in any test fixture or commit.
+- [ ] Zero `unsafe` blocks in any of the 9 workspace crates (`unsafe_code = "forbid"`).
 - [ ] `cargo fmt --all -- --check` passes cleanly.
 - [ ] `cargo clippy --workspace --all-targets -- -D warnings` produces zero warnings.
 - [ ] All tests pass: `cargo test --workspace`.
 - [ ] Specter contract verification: public API signatures are backward-compatible.
-- [ ] Documentation updated if public structs, flags, or configuration options changed.
+- [ ] Documentation / `CHANGELOG.md` updated if CLI flags or `zerho.toml` options changed.
 
 ---
 
