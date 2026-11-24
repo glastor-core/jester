@@ -23,7 +23,7 @@ root = "."
 entry = "src/main.tsx"
 public_dir = "public"
 env_prefix = "ZERHO_"
-framework = "react"          # react | preact | solid | vanilla
+framework = "react"          # react | preact | vanilla (solid uses classic JSX pragma)
 
 [server]
 host = "127.0.0.1"
@@ -46,9 +46,9 @@ scope_hoisting = true        # flatten acyclic ESM without runtime wrappers
 analyze = false              # emit dist/stats.html interactive treemap
 ssr = false                  # emit DOM-free dist/server.mjs for Edge/SSR
 
-# [build.entries]            # Multi-Page App (MPA) entry points
-# index = "index.html"
-# admin = "admin.html"
+# [build.entries]            # Multi-Page App (MPA) script entry points
+# index = "src/main.ts"
+# admin = "src/admin.ts"
 
 [build.budgets]
 max_js_kb = 150
@@ -168,7 +168,7 @@ const cliCommands = [
   { cmd: 'zerho build [--config PATH] [--analyze] [--watch] [--ssr]', desc: 'Parallel rayon build with Scope Hoisting, oxc_minifier, redb cache, Web Workers/.wasm, Shared Chunks + modulepreload, Brotli .br, SRI/CSP, SSR Edge mode, and optional dist/stats.html.' },
   { cmd: 'zerho check [--config PATH] [--strict]', desc: 'Audit the full module graph in milliseconds for broken imports, circular dependencies, missing .env vars, and leaked secrets.' },
   { cmd: 'zerho preview [--config PATH] [--port PORT]', desc: 'Serve the production dist/ directory locally with automatic Accept-Encoding: br negotiation.' },
-  { cmd: 'zerho bench [--config PATH] [--iterations N]', desc: 'Run reproducible cold Oxc transform, warm redb cache, and full build benchmarks (default: 10 iterations).' },
+  { cmd: 'zerho bench [--config PATH] [--iterations N] [--synthetic N] [--json]', desc: 'Run reproducible cold Oxc transform, warm redb cache, and full/synthetic N-module build benchmarks with optional JSON telemetry.' },
   { cmd: 'zerho schema', desc: 'Print the complete JSON Schema for zerho.toml for IDE validation and autocompletion.' },
   { cmd: 'zerho wit', desc: 'Print the canonical zerho:plugin@0.1.0 WebAssembly Component Model WIT contract.' },
 ];
@@ -361,8 +361,11 @@ const cliCommands = [
         </h2>
         <p>
           Third-party plugins execute inside a fuel-metered <span class="inline-code notranslate" translate="no">wasmtime v29</span> sandbox
-          (default fuel budget: 1,000,000 instructions) rather than an unrestricted Node.js process. Inspect this
-          contract anytime via <span class="inline-code notranslate" translate="no">zerho wit</span>:
+          (default fuel budget: 1,000,000 instructions) passing UTF-8 strings across linear memory (<span class="inline-code notranslate" translate="no">zerho_alloc</span>,
+          <span class="inline-code notranslate" translate="no">zerho_resolve_id</span>, <span class="inline-code notranslate" translate="no">zerho_load</span>,
+          <span class="inline-code notranslate" translate="no">zerho_transform</span>). See the complete Rust → <span class="inline-code notranslate" translate="no">.wasm</span>
+          reference plugin in <span class="inline-code notranslate" translate="no">examples/wasm-plugin/</span> or inspect this contract anytime via
+          <span class="inline-code notranslate" translate="no">zerho wit</span>:
         </p>
         <div class="code-block">
           <div class="code-header">
