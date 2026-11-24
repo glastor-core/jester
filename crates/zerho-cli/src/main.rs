@@ -1,19 +1,18 @@
+mod bench;
 mod scaffold;
 
 use std::env;
-use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
+use bench::execute_bench;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use scaffold::{Template, scaffold_project};
 use zerho_bundler::{Bundler, run_project_check};
 use zerho_config::ZerhoConfig;
-use zerho_core::{ModuleKind, ZerhoError, ZerhoResult};
-use zerho_graph::{CachedArtifact, DiskCache};
+use zerho_core::{ZerhoError, ZerhoResult};
 use zerho_server::{DevServer, PreviewServer};
-use zerho_transform::{TransformInput, TransformPipeline};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -270,83 +269,20 @@ fn cmd_bench(flags: &[String]) -> ZerhoResult<()> {
                 .map_err(|_| ZerhoError::Config(format!("invalid `--iterations` value `{raw}`")))
         })?
         .max(1);
+    let synthetic: Option<usize> = match find_flag_value(flags, "--synthetic") {
+        Some(raw) => Some(raw.parse::<usize>().map_err(|_| {
+            ZerhoError::Config(format!("invalid `--synthetic` module count `{raw}`"))
+        })?),
+        None => None,
+    };
+    let json_output = flags.iter().any(|f| f == "--json");
 
-    let root = config
-        .project
-        .root
-        .canonicalize()
-        .unwrap_or_else(|_| config.project.root.clone());
-    let entry_path = root.join(&config.project.entry);
-    let entry_source = fs::read_to_string(&entry_path).map_err(|err| ZerhoError::Io {
-        path: Some(entry_path.clone()),
-        reason: err.to_string(),
-    })?;
-    let kind = ModuleKind::from_path(&entry_path);
-
-    // 1. Cold transform benchmark (Oxc)
-    let pipeline = TransformPipeline::default();
-    let t_cold = Instant::now();
-    let transformed = pipeline.transform(&TransformInput {
-        path: entry_path,
-        kind,
-        source: entry_source.clone(),
-        framework: config.project.framework,
-        is_dev: true,
-        minify_css: false,
-    })?;
-    let cold_duration = t_cold.elapsed();
-
-    // 2. Persistent DiskCache hit benchmark (blake3)
-    let cache_dir = root.join(&config.cache.dir);
-    let cache = DiskCache::new(cache_dir, true);
-    let cache_key = DiskCache::compute_key(
-        &entry_source,
-        "bench",
-        config.project.framework.as_str(),
-        true,
-        false,
-    );
-    cache.put(
-        cache_key,
-        &CachedArtifact {
-            code: transformed.code,
-            imports: transformed.imports,
-            output_hash: transformed.hash,
-        },
-    )?;
-
-    let t_cache = Instant::now();
-    for _ in 0..iterations {
-        let _ = cache.get(cache_key);
+    let result = execute_bench(&config, iterations, synthetic)?;
+    if json_output {
+        println!("{}", result.to_json());
+    } else {
+        result.print_human();
     }
-    let avg_cache = t_cache.elapsed() / u32::try_from(iterations).unwrap_or(1);
-
-    // 3. Full production build benchmark (Oxc + LightningCSS + Bundler + Disk I/O)
-    let mut build_times = Vec::with_capacity(iterations);
-    let mut module_count = 0;
-    for _ in 0..iterations {
-        let mut bundler = Bundler::new(config.clone());
-        let start = Instant::now();
-        let out = bundler.build()?;
-        build_times.push(start.elapsed());
-        module_count = out.module_count;
-    }
-    build_times.sort();
-    let min_build = build_times[0];
-    let total_build: Duration = build_times.iter().copied().sum();
-    let avg_build = total_build / u32::try_from(iterations).unwrap_or(1);
-    let p95_idx = ((iterations * 95) / 100).min(iterations - 1);
-    let p95_build = build_times[p95_idx];
-
-    println!("zerho benchmark — {} ({} iterations)", config.project.name, iterations);
-    println!("  cold transform (oxc):          {:.2} ms", cold_duration.as_secs_f64() * 1000.0);
-    println!("  warm disk cache hit (blake3):  {:.3} ms", avg_cache.as_secs_f64() * 1000.0);
-    println!(
-        "  production build ({module_count} mods):     min {:.2} ms | avg {:.2} ms | p95 {:.2} ms",
-        min_build.as_secs_f64() * 1000.0,
-        avg_build.as_secs_f64() * 1000.0,
-        p95_build.as_secs_f64() * 1000.0,
-    );
     Ok(())
 }
 
@@ -374,7 +310,10 @@ fn find_positional_arg(flags: &[String]) -> Option<&str> {
             skip_next = false;
             continue;
         }
-        if matches!(arg.as_str(), "--template" | "--config" | "--port" | "--iterations") {
+        if matches!(
+            arg.as_str(),
+            "--template" | "--config" | "--port" | "--iterations" | "--synthetic"
+        ) {
             skip_next = true;
             continue;
         }
@@ -421,6 +360,8 @@ fn print_help() {
            --watch               Watch source files and rebuild incrementally on `zerho build`\n\
            --strict              Fail `zerho check` on warnings as well as errors\n\
            --iterations <N>      Number of iterations for `zerho bench` (default: 10)\n\
+           --synthetic <N>       Generate & benchmark a deterministic N-module TS graph\n\
+           --json                Emit machine-readable JSON output for `zerho bench`\n\
            -V, --version         Print version"
     );
 }

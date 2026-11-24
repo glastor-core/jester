@@ -208,55 +208,109 @@ const crates = [
         </span>
         <h2>Measured on real builds, not synthetic micro-loops.</h2>
         <p>
-          Reproducible via <span class="inline-code">zerho bench --iterations 20</span> on Windows
-          using the compiled v0.7.0 <span class="inline-code">--release</span> binary (16.57 MB) with
-          Scope Hoisting, <span class="inline-code">oxc_minifier</span>, Brotli <span class="inline-code">.br</span>, and SHA-384 SRI enabled.
+          Every number below includes exact hardware specs, cold vs. warm <span class="inline-code">redb</span> timings,
+          and a 1-command <span class="inline-code">zerho bench --json</span> harness so any developer can verify on their own machine.
         </p>
       </div>
 
       <div class="bench-grid">
         <div class="bench-card">
           <div class="bench-head">
-            <h3>basic-ts</h3>
-            <span class="bench-badge">20 iterations · v0.7.0 --release</span>
+            <h3>basic-ts (3 modules)</h3>
+            <span class="bench-badge">20 iters · Scope Hoisted</span>
           </div>
-          <p>TypeScript entry + CSS bundling, Scope Hoisting, oxc_minifier, Brotli .br, SHA-384 SRI, and CSP manifest.</p>
+          <p>TypeScript + CSS, Scope Hoisting, oxc_minifier, Brotli .br (458 B), SHA-384 SRI, and CSP manifest.</p>
           <div class="bench-metrics">
             <div class="bench-metric">
-              <strong>0.73 ms</strong>
+              <strong>0.553 ms</strong>
               <span>Cold Oxc Transform</span>
             </div>
             <div class="bench-metric">
-              <strong>0.002 ms</strong>
-              <span>Warm redb Cache (2 µs)</span>
+              <strong>0.0017 ms</strong>
+              <span>Warm redb Hit (1.7 µs)</span>
             </div>
             <div class="bench-metric">
-              <strong>17.06 ms</strong>
-              <span>Min Build (19.96 ms avg)</span>
+              <strong>19.32 ms</strong>
+              <span>Warm Min (43.04 ms cold)</span>
             </div>
           </div>
         </div>
 
         <div class="bench-card">
           <div class="bench-head">
-            <h3>react-tsx-demo</h3>
-            <span class="bench-badge">20 iterations · v0.7.0 --release</span>
+            <h3>react-tsx-demo (5 modules)</h3>
+            <span class="bench-badge">20 iters · Code Split</span>
           </div>
-          <p>5 modules + CJS-to-ESM + dynamic import() splitting + 2 Source Maps v3 + Scope Hoisting + Brotli .br.</p>
+          <p>React TSX + CJS-to-ESM + dynamic import() splitting + 2 Source Maps v3 + Brotli .br (1.00 KB).</p>
           <div class="bench-metrics">
             <div class="bench-metric">
-              <strong>0.63 ms</strong>
+              <strong>0.548 ms</strong>
               <span>Cold TSX Transform</span>
             </div>
             <div class="bench-metric">
-              <strong>0.002 ms</strong>
-              <span>Warm redb Cache (2 µs)</span>
+              <strong>0.0020 ms</strong>
+              <span>Warm redb Hit (2.0 µs)</span>
             </div>
             <div class="bench-metric">
-              <strong>29.76 ms</strong>
-              <span>Min Build (35.16 ms avg)</span>
+              <strong>29.18 ms</strong>
+              <span>Warm Min (60.27 ms cold)</span>
             </div>
           </div>
+        </div>
+
+        <div class="bench-card">
+          <div class="bench-head">
+            <h3>synthetic-500-modules</h3>
+            <span class="bench-badge">500 TS mods · 499 shaken</span>
+          </div>
+          <p>Deterministic 500-module TS graph: rayon parallel + Scope Hoisting + oxc_minifier + Brotli (1.53 KB).</p>
+          <div class="bench-metrics">
+            <div class="bench-metric">
+              <strong>1,254 ms</strong>
+              <span>Cold Build (empty cache)</span>
+            </div>
+            <div class="bench-metric">
+              <strong>763.53 ms</strong>
+              <span>Warm redb Build Min</span>
+            </div>
+            <div class="bench-metric">
+              <strong>655 mods/s</strong>
+              <span>End-to-End Throughput</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transparent Hardware & Reproducibility Box -->
+      <div class="card" style="margin-top: 24px;">
+        <div class="bench-head" style="margin-bottom: 10px;">
+          <h3 style="display:flex;align-items:center;gap:8px;margin:0;">
+            <span class="material-symbols-outlined" aria-hidden="true">verified</span>
+            <span>Reference Hardware &amp; 1-Command Verification</span>
+          </h3>
+          <span class="bench-badge">benchmarks/results.json</span>
+        </div>
+        <p style="margin-bottom: 14px;">
+          <strong>Host:</strong> AMD Zen 3 (Family 25 Model 80, 16 logical threads) ·
+          <strong>OS:</strong> Windows 11 x86_64 (NT 10.0.26300.0) ·
+          <strong>Toolchain:</strong> <span class="inline-code">rustc 1.96.1</span> ·
+          <strong>Binary:</strong> <span class="inline-code">zerho 0.7.0 --release</span> (16.60 MB) ·
+          <strong>Flags:</strong> <span class="inline-code">scope_hoisting=true minify=true brotli=true sri=true</span>.
+        </p>
+        <div class="cli-box" style="margin: 0; max-width: 100%;" role="region" aria-label="Reproduce benchmark command">
+          <div class="cli-code">
+            <span class="cli-prompt" aria-hidden="true">$</span>
+            <code>cargo build --release -p zerho-cli &amp;&amp; ./target/release/zerho bench --synthetic 500 --iterations 5 --json</code>
+          </div>
+          <button
+            type="button"
+            class="copy-btn"
+            data-copy="cargo build --release -p zerho-cli && ./target/release/zerho bench --synthetic 500 --iterations 5 --json"
+            aria-label="Copy benchmark reproduction command"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+            <span data-copy-label>Copy</span>
+          </button>
         </div>
       </div>
 

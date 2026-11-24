@@ -1,0 +1,108 @@
+{
+  "metadata": {
+    "recorded_at": "2026-11-23",
+    "zerho_version": "0.7.0",
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "binary_bytes": 17404416,
+    "host": {
+      "os": "Windows 11 x86_64 (NT 10.0.26300.0)",
+      "cpu": "AMD64 Family 25 Model 80 (Zen 3)",
+      "logical_threads": 16
+    }
+  },
+  "runs": [
+    {
+      "environment": {
+        "zerho_version": "0.7.0",
+        "profile": "release",
+        "os": "windows",
+        "arch": "x86_64",
+        "cpu_threads": 16
+      },
+      "fixture": {
+        "project": "basic-ts",
+        "iterations": 20,
+        "modules": 3,
+        "tree_shaken_exports": 2,
+        "scope_hoisted": true,
+        "minify": true,
+        "brotli": true,
+        "sri": true
+      },
+      "metrics": {
+        "cold_transform_ms": 0.553,
+        "warm_redb_cache_ms": 0.0017,
+        "cold_build_ms": 43.04,
+        "warm_build_min_ms": 19.32,
+        "warm_build_avg_ms": 20.26,
+        "warm_build_p95_ms": 21.30,
+        "throughput_mods_per_sec": 155,
+        "entry_raw_bytes": 804,
+        "entry_gzip_bytes": 543,
+        "entry_brotli_bytes": 458
+      }
+    },
+    {
+      "environment": {
+        "zerho_version": "0.7.0",
+        "profile": "release",
+        "os": "windows",
+        "arch": "x86_64",
+        "cpu_threads": 16
+      },
+      "fixture": {
+        "project": "react-tsx-demo",
+        "iterations": 20,
+        "modules": 5,
+        "tree_shaken_exports": 2,
+        "scope_hoisted": false,
+        "minify": true,
+        "brotli": true,
+        "sri": true
+      },
+      "metrics": {
+        "cold_transform_ms": 0.548,
+        "warm_redb_cache_ms": 0.0020,
+        "cold_build_ms": 60.27,
+        "warm_build_min_ms": 29.18,
+        "warm_build_avg_ms": 30.72,
+        "warm_build_p95_ms": 35.00,
+        "throughput_mods_per_sec": 171,
+        "entry_raw_bytes": 2335,
+        "entry_gzip_bytes": 1112,
+        "entry_brotli_bytes": 1025
+      }
+    },
+    {
+      "environment": {
+        "zerho_version": "0.7.0",
+        "profile": "release",
+        "os": "windows",
+        "arch": "x86_64",
+        "cpu_threads": 16
+      },
+      "fixture": {
+        "project": "synthetic-500-modules",
+        "iterations": 5,
+        "modules": 500,
+        "tree_shaken_exports": 499,
+        "scope_hoisted": true,
+        "minify": true,
+        "brotli": true,
+        "sri": true
+      },
+      "metrics": {
+        "cold_transform_ms": 1.266,
+        "warm_redb_cache_ms": 0.0435,
+        "cold_build_ms": 1254.33,
+        "warm_build_min_ms": 763.53,
+        "warm_build_avg_ms": 774.67,
+        "warm_build_p95_ms": 790.54,
+        "throughput_mods_per_sec": 655,
+        "entry_raw_bytes": 17789,
+        "entry_gzip_bytes": 2794,
+        "entry_brotli_bytes": 1562
+      }
+    }
+  ]
+}
