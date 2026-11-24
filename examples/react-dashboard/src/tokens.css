@@ -1,9 +1,20 @@
 :root {
-  --bg: #090d14;
-  --surface: #111827;
-  --border: #1f2937;
+  --bg: #070b12;
+  --bg-panel: #0d1320;
+  --bg-elevated: #11192a;
+  --border: #1d283a;
+  --border-strong: #2d3c54;
   --text: #f3f4f6;
-  --muted: #9ca3af;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
   --accent: #f97316;
+  --accent-bright: #fb923c;
+  --accent-dim: rgba(249, 115, 22, 0.14);
+  --accent-border: rgba(249, 115, 22, 0.35);
   --green: #34d399;
+  --green-dim: rgba(52, 211, 153, 0.12);
+  --blue: #60a5fa;
+  --font-display: "Red Hat Display", system-ui, sans-serif;
+  --font-body: "Red Hat Text", system-ui, sans-serif;
+  --font-mono: "Red Hat Mono", ui-monospace, monospace;
 }

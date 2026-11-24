@@ -1,29 +1,50 @@
-export interface PipelineRow {
-  readonly stage: string;
-  readonly ms: number;
-  readonly status: string;
+export interface ChunkStat {
+  readonly file: string;
+  readonly rawKb: string;
+  readonly gzipKb: string;
+  readonly brotliKb: string;
+  readonly sri: string;
 }
 
-export function getPipelineBreakdown(): readonly PipelineRow[] {
+export function getChunkBreakdown(): readonly ChunkStat[] {
   return [
-    { stage: "oxc_resolver + tsconfig paths", ms: 0.42, status: "cached" },
-    { stage: "oxc TS/JSX + Fast Refresh", ms: 0.55, status: "cached" },
-    { stage: "lightningcss + @import/url()", ms: 0.31, status: "minified" },
-    { stage: "Scope Hoisting + Brotli .br + SRI", ms: 4.18, status: "verified" },
+    { file: "assets/index.js", rawKb: "1.33 KB", gzipKb: "0.67 KB", brotliKb: "0.58 KB", sri: "sha384-verified" },
+    { file: "assets/chunk-analytics.js", rawKb: "1.25 KB", gzipKb: "0.73 KB", brotliKb: "0.65 KB", sri: "sha384-verified" },
+    { file: "assets/index.css", rawKb: "1.19 KB", gzipKb: "0.56 KB", brotliKb: "0.49 KB", sri: "sha384-verified" },
   ];
 }
 
 export default function renderAnalyticsMarkup(): string {
-  const rows = getPipelineBreakdown()
+  const rows = getChunkBreakdown()
     .map(
-      (r) =>
-        `<tr><td>${r.stage}</td><td>${r.ms.toFixed(2)} ms</td><td>${r.status}</td></tr>`,
+      (c) => `<tr>
+        <td style="color:#fff;">${c.file}</td>
+        <td>${c.rawKb}</td>
+        <td>${c.gzipKb}</td>
+        <td style="color:#34d399;font-weight:600;">${c.brotliKb}</td>
+        <td style="color:#fb923c;">${c.sri}</td>
+      </tr>`,
     )
     .join("");
-  return `<section style="margin-top:20px;background:#111827;border:1px solid #1f2937;border-radius:12px;padding:18px;">
-    <h2 style="margin:0 0 12px;font-family:'Red Hat Display',sans-serif;font-size:1.1rem;">Lazy-Loaded Pipeline Telemetry (Async Chunk)</h2>
-    <table style="width:100%;border-collapse:collapse;font-family:'Red Hat Mono',monospace;font-size:0.84rem;">
-      <thead><tr><th align="left">Stage</th><th align="left">Time</th><th align="left">Status</th></tr></thead>
+
+  return `<section class="async-panel">
+    <div class="panel-head">
+      <h2>
+        <span class="material-symbols-outlined notranslate" translate="no">call_split</span>
+        <span>Lazy-Loaded Async Chunk Telemetry</span>
+      </h2>
+      <span class="check-ok">dynamic import()</span>
+    </div>
+    <table class="chunk-table">
+      <thead>
+        <tr>
+          <th>Emitted Asset</th>
+          <th>Raw</th>
+          <th>Gzip</th>
+          <th>Brotli (.br)</th>
+          <th>Integrity</th>
+        </tr>
+      </thead>
       <tbody>${rows}</tbody>
     </table>
   </section>`;
