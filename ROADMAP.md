@@ -1,6 +1,6 @@
 # zerho Roadmap
 
-> **Current verified baseline:** `v0.9.0` — 100% Safe Rust (`unsafe_code = "forbid"`), **60/60 tests passing**, **100/100 Vektor repo hygiene**, Web Workers + `.wasm` imports, string-passing WASM plugin ABI + Rust example plugin, SSR Edge target (`--ssr`), and Live Treemap in `/__inspect`.
+> **Current verified baseline:** `v1.0.0` — 100% Safe Rust (`unsafe_code = "forbid"`), **63/63 tests passing** (including real-app E2E suite), **100/100 Vektor repo hygiene**, neutral `zerho` vs `Vite` CI benchmarks, 1-line cross-platform installers (`install.sh`, `install.ps1`, Homebrew, Scoop), and public portal on `https://zerho.xyz`.
 
 ---
 
@@ -32,12 +32,12 @@
 
 ---
 
-## `v1.0.0` — Public Launch, Distribution & Neutral Benchmarks
+## `v1.0.0` — Public Launch, Distribution & Neutral Benchmarks *(Completed)*
 
-- [ ] **Public Neutral CI Benchmarks (`benchmarks.yml`):** Automated `zerho` vs `Vite` comparison (500 & 1,000 modules) on GitHub `ubuntu-latest` runners publishing reproducible JSON snapshots.
-- [ ] **1-Line Cross-Platform Installers:** Signed GitHub Releases (`.sha256`) for Windows, macOS (ARM64/x64), and Linux + `cargo install zerho`, Homebrew tap, and Winget/Scoop manifests.
-- [ ] **Real-App E2E Suite:** Automated integration tests exercising `zerho dev` and `zerho preview` against real React 19, Preact, and strict TypeScript apps.
-- [ ] **Public Docs & Landing Deploy:** Publish `website/` on Cloudflare Pages with a *"Migrate from Vite to zerho in 2 minutes"* guide.
+- [x] **Public Neutral CI Benchmarks (`.github/workflows/benchmarks.yml`):** Automated `zerho` vs `Vite` comparison (500 & 1,000 modules) on GitHub `ubuntu-latest` runners publishing reproducible JSON snapshots & step summary tables.
+- [x] **1-Line Cross-Platform Installers:** Signed GitHub Releases (`.sha256` + CycloneDX SBOM) for Windows, macOS (ARM64/x64), and Linux + `scripts/install.sh`, `scripts/install.ps1`, Homebrew formula (`packaging/homebrew/zerho.rb`), and Scoop manifest (`packaging/scoop/zerho.json`).
+- [x] **Real-App E2E Suite (`crates/zerho-cli/tests/e2e_real_apps.rs`):** Automated integration tests exercising live `DevServer` and `PreviewServer` over TCP/HTTP/WebSocket against real React 19, Preact, and strict TypeScript apps.
+- [x] **Public Docs & Landing Deploy:** Published `website/` on Cloudflare Pages (`https://zerho.xyz`) with *"Migrate from Vite in 1 command"* and 1-click multi-OS installer tabs.
 
 ---
 

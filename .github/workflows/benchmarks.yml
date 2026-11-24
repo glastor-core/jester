@@ -1,0 +1,141 @@
+name: Neutral CI Benchmarks (zerho vs Vite)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - ".github/workflows/benchmarks.yml"
+  release:
+    types: [published]
+  schedule:
+    - cron: "0 7 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark-ubuntu:
+    name: zerho vs Vite (500 & 1000 modules · ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+
+      - name: Setup Node.js (for neutral Vite baseline)
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Build zerho release binary
+        run: cargo build --release -p zerho-cli
+
+      - name: Run zerho synthetic benchmarks (500 & 1000 modules)
+        shell: bash
+        run: |
+          mkdir -p bench-out
+          ./target/release/zerho bench --synthetic 500 --iterations 5 --json > bench-out/zerho-500.json
+          ./target/release/zerho bench --synthetic 1000 --iterations 3 --json > bench-out/zerho-1000.json
+
+      - name: Run neutral Vite baseline (500 & 1000 TS modules)
+        shell: bash
+        run: |
+          node -e '
+          const fs = require("fs");
+          const path = require("path");
+          const { execSync } = require("child_process");
+
+          function benchVite(count) {
+            const dir = path.join(process.cwd(), "bench-out", `vite-${count}`);
+            fs.mkdirSync(path.join(dir, "src", "mods"), { recursive: true });
+            fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({
+              name: `vite-bench-${count}`,
+              private: true,
+              type: "module",
+              devDependencies: { vite: "^6.0.0" }
+            }, null, 2));
+            fs.writeFileSync(path.join(dir, "index.html"),
+              `<!doctype html><html><body><div id="app"></div><script type="module" src="/src/main.ts"></script></body></html>`);
+            let imports = "";
+            let calls = [];
+            for (let i = 0; i < count; i++) {
+              fs.writeFileSync(path.join(dir, "src", "mods", `m${i}.ts`),
+                `export const v${i}: number = ${i};\nexport function fn${i}(x: number): number { return x + v${i}; }\n`);
+              imports += `import { fn${i} } from "./mods/m${i}";\n`;
+              calls.push(`fn${i}(${i})`);
+            }
+            fs.writeFileSync(path.join(dir, "src", "main.ts"),
+              `${imports}\nconsole.log(${calls.slice(0, 10).join(" + ")});\n`);
+            execSync("npm install --no-audit --no-fund --silent", { cwd: dir, stdio: "inherit" });
+            const t0 = performance.now();
+            execSync("npx vite build --logLevel silent", { cwd: dir, stdio: "inherit" });
+            const coldMs = +(performance.now() - t0).toFixed(2);
+            const t1 = performance.now();
+            execSync("npx vite build --logLevel silent", { cwd: dir, stdio: "inherit" });
+            const warmMs = +(performance.now() - t1).toFixed(2);
+            return { modules: count, cold_ms: coldMs, warm_ms: warmMs };
+          }
+
+          const report = {
+            runner: "ubuntu-latest",
+            node: process.version,
+            timestamp: new Date().toISOString(),
+            vite_500: benchVite(500),
+            vite_1000: benchVite(1000),
+          };
+          fs.writeFileSync("bench-out/vite-results.json", JSON.stringify(report, null, 2));
+          '
+
+      - name: Publish Markdown summary to GITHUB_STEP_SUMMARY
+        shell: bash
+        run: |
+          node -e '
+          const fs = require("fs");
+          const z500 = JSON.parse(fs.readFileSync("bench-out/zerho-500.json", "utf8"));
+          const z1000 = JSON.parse(fs.readFileSync("bench-out/zerho-1000.json", "utf8"));
+          const vite = JSON.parse(fs.readFileSync("bench-out/vite-results.json", "utf8"));
+          const z500Cold = z500.full_build_cold_ms ?? z500.cold_build_ms ?? "n/a";
+          const z500Warm = z500.full_build_warm_min_ms ?? z500.warm_build_min_ms ?? "n/a";
+          const z1000Cold = z1000.full_build_cold_ms ?? z1000.cold_build_ms ?? "n/a";
+          const z1000Warm = z1000.full_build_warm_min_ms ?? z1000.warm_build_min_ms ?? "n/a";
+          const md = [
+            "## Neutral CI Benchmarks (`ubuntu-latest`)",
+            "",
+            "| Graph | zerho Cold | zerho Warm (`redb`) | Vite Cold | Vite Warm |",
+            "| :--- | :---: | :---: | :---: | :---: |",
+            `| 500 TS modules | ${z500Cold} ms | ${z500Warm} ms | ${vite.vite_500.cold_ms} ms | ${vite.vite_500.warm_ms} ms |`,
+            `| 1,000 TS modules | ${z1000Cold} ms | ${z1000Warm} ms | ${vite.vite_1000.cold_ms} ms | ${vite.vite_1000.warm_ms} ms |`,
+            ""
+          ].join("\n");
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+          '
+
+      - name: Upload reproducible JSON benchmark artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: neutral-benchmarks-ubuntu-latest
+          path: |
+            bench-out/zerho-500.json
+            bench-out/zerho-1000.json
+            bench-out/vite-results.json
+          retention-days: 30

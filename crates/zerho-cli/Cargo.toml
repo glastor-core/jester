@@ -20,5 +20,8 @@ zerho-plugin.workspace = true
 zerho-server.workspace = true
 zerho-transform.workspace = true
 
+[dev-dependencies]
+axum.workspace = true
+
 [lints]
 workspace = true

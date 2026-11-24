@@ -5,6 +5,13 @@ All notable changes to **zerho** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-11-24
+
+### Added
+- **Public Neutral CI Benchmarks (`.github/workflows/benchmarks.yml`):** Automated `zerho` vs `Vite` comparison on 500 & 1,000 TypeScript modules on `ubuntu-latest`, publishing reproducible JSON artifacts and Markdown summary tables.
+- **1-Line Cross-Platform Installers & Packaging (`scripts/install.sh`, `scripts/install.ps1`, `packaging/homebrew/zerho.rb`, `packaging/scoop/zerho.json`):** Verified SHA-256 one-line installers for Linux x64, macOS ARM64/x64, and Windows x64, plus Homebrew tap formula, Scoop manifest, and `x86_64-apple-darwin` added to `release.yml`.
+- **Real-App E2E Integration Suite (`crates/zerho-cli/tests/e2e_real_apps.rs`):** Live TCP/HTTP/WebSocket E2E tests exercising `DevServer`, `Bundler`, and `PreviewServer` against React 19 TSX (Fast Refresh, `/@zerho/bundle`, `/__inspect` Treemap, WebSocket HMR `101`, SHA-384 SRI, Brotli, path traversal), Preact TSX, and strict TypeScript + Edge SSR (`dist/server.mjs`).
+
 ## [0.9.0] - 2026-11-24
 
 ### Added

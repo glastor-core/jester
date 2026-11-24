@@ -10,12 +10,12 @@ const installMethods = [
   {
     id: 'unix',
     label: 'Linux / macOS',
-    cmd: 'curl -fsSL https://github.com/glastor-core/jester/releases/latest/download/zerho-linux-x86_64.tar.gz | tar -xz',
+    cmd: 'curl -fsSL https://raw.githubusercontent.com/glastor-core/jester/main/scripts/install.sh | sh',
   },
   {
     id: 'win',
     label: 'Windows',
-    cmd: 'irm https://github.com/glastor-core/jester/releases/latest/download/zerho-windows-x86_64.zip -OutFile zerho.zip; Expand-Archive zerho.zip',
+    cmd: 'irm https://raw.githubusercontent.com/glastor-core/jester/main/scripts/install.ps1 | iex',
   },
   {
     id: 'quickstart',
@@ -208,7 +208,7 @@ const crates = [
     <div class="container">
       <div class="eyebrow">
         <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">bolt</span>
-        <span>v0.9.0 · Web Workers &amp; .wasm · SSR Edge Target · WASM Plugin ABI · Zero Node.js</span>
+        <span>v1.0.0 · Web Workers &amp; .wasm · SSR Edge Target · WASM Plugin ABI · Zero Node.js</span>
       </div>
 
       <h1>
@@ -269,7 +269,7 @@ const crates = [
       <div class="hero-terminal notranslate" translate="no" aria-label="Sample zerho build output">
         <div class="terminal-bar">
           <span class="terminal-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-          <span>zerho v0.9.0 · zero-node build output</span>
+          <span>zerho v1.0.0 · zero-node build output</span>
         </div>
         <pre class="terminal-body"><code><span class="t-accent">$</span> zerho build --analyze
 <span class="t-green">✓</span> Graph resolved (5 modules) · redb cache hits: 5/5 (1.7 µs)
@@ -436,7 +436,7 @@ const crates = [
           <p class="bar-group-sub">Single static binary vs. Node.js runtime + typical Vite/Rollup devDependencies</p>
           <div class="bar-row">
             <div class="bar-label-row">
-              <span class="notranslate" translate="no" style="color:#fff;font-weight:600;">zerho v0.9.0 (Zero-Node)</span>
+              <span class="notranslate" translate="no" style="color:#fff;font-weight:600;">zerho v1.0.0 (Zero-Node)</span>
               <span class="t-accent">16.6 MB</span>
             </div>
             <div class="bar-track"><div class="bar-fill bar-fill-accent" style="width: 7%;"></div></div>
@@ -574,7 +574,7 @@ const crates = [
           <thead>
             <tr>
               <th>Dimension</th>
-              <th class="col-zerho">zerho v0.9.0</th>
+              <th class="col-zerho">zerho v1.0.0</th>
               <th>Vite 8 (Rolldown + Node.js)</th>
             </tr>
           </thead>
@@ -666,7 +666,7 @@ const crates = [
           <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">hub</span>
           <span>Modular Rust Workspace</span>
         </span>
-        <h2>9 focused crates. 60/60 passing tests. Pedantic clean.</h2>
+        <h2>9 focused crates. 63/63 passing tests. Pedantic clean.</h2>
         <p>
           Every layer is cleanly decoupled in a Rust Edition 2024 workspace enforced with
           <span class="inline-code notranslate" translate="no">clippy::pedantic -D warnings</span> and
@@ -675,7 +675,7 @@ const crates = [
         <div class="arch-stats">
           <span class="arch-stat">Edition 2024</span>
           <span class="arch-stat">unsafe_code = "forbid"</span>
-          <span class="arch-stat">60/60 tests</span>
+          <span class="arch-stat">63/63 tests</span>
         </div>
       </div>
 
@@ -698,7 +698,7 @@ const crates = [
         <div class="fit-col">
           <h3>
             <span class="material-symbols-outlined notranslate" translate="no" style="color: var(--green);" aria-hidden="true">check_circle</span>
-            <span>Great fit today (v0.9.0)</span>
+            <span>Great fit today (v1.0.0)</span>
           </h3>
           <ul class="fit-list">
             <li><span style="color: var(--green);">•</span><span>React, Preact, and TypeScript SPAs, MPAs, and dual-format libraries (<span class="inline-code notranslate" translate="no">[build.lib]</span>).</span></li>

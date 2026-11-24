@@ -203,6 +203,15 @@ impl PreviewServer {
         Self { config, dist_dir }
     }
 
+    /// Builds the Axum router serving built production assets with Brotli negotiation.
+    pub fn router(&self) -> Router {
+        let dist = Arc::new(self.dist_dir.clone());
+        Router::new()
+            .route("/", get(serve_preview_index))
+            .route("/{*path}", get(serve_preview_asset))
+            .with_state(dist)
+    }
+
     pub async fn serve(&self) -> ZerhoResult<()> {
         self.config.validate()?;
         if !self.dist_dir.is_dir() {
@@ -225,11 +234,7 @@ impl PreviewServer {
             self.dist_dir.display()
         );
 
-        let dist = Arc::new(self.dist_dir.clone());
-        let app = Router::new()
-            .route("/", get(serve_preview_index))
-            .route("/{*path}", get(serve_preview_asset))
-            .with_state(dist);
+        let app = self.router();
 
         axum::serve(listener, app)
             .with_graceful_shutdown(shutdown_signal())

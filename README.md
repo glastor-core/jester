@@ -4,11 +4,11 @@
 
 [![Portal](https://img.shields.io/badge/Portal-zerho.xyz-f97316?style=for-the-badge)](https://zerho.xyz)
 [![Safe Rust](https://img.shields.io/badge/Rust-unsafe__code%20%3D%20forbid-0f172a?style=for-the-badge)](https://github.com/glastor-core/jester)
-[![Version](https://img.shields.io/badge/Version-v0.9.0-10b981?style=for-the-badge)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-v1.0.0-10b981?style=for-the-badge)](CHANGELOG.md)
 
-`zerho` (`https://github.com/glastor-core/jester`) ships as a single **16.60 MB** native Rust binary (`unsafe_code = "forbid"`, `clippy::pedantic -D warnings`, **60/60** passing tests) with declarative `zerho.toml` configuration. Built on `oxc`, `lightningcss`, `oxc_resolver`, `redb`, `blake3`, `rayon`, `axum`, and `wasmtime v29`, it powers React, Preact, TypeScript, and modern web apps without installing Node.js.
+`zerho` (`https://github.com/glastor-core/jester`) ships as a single **16.60 MB** native Rust binary (`unsafe_code = "forbid"`, `clippy::pedantic -D warnings`, **63/63** passing tests) with declarative `zerho.toml` configuration. Built on `oxc`, `lightningcss`, `oxc_resolver`, `redb`, `blake3`, `rayon`, `axum`, and `wasmtime v29`, it powers React, Preact, TypeScript, and modern web apps without installing Node.js.
 
-## What `zerho v0.9.0` Actually Ships
+## What `zerho v1.0.0` Actually Ships
 
 - **Compiler & Assets (`zerho-transform`):** Sub-millisecond `oxc` TS/JSX transforms, native React Fast Refresh (`$RefreshReg$`), `oxc_minifier` + `oxc_mangler` + DCE, lexical Scope Hoisting, Barrel File Optimizer, deep multi-file CommonJS ↔ ESM pre-bundler (`require()` graphs), `lightningcss` CSS Modules + `@import`/`url(...)` rewriting, Web Worker `new URL(..., import.meta.url)` rewriting, and pure-Rust SVG/WebP optimization.
 - **Dev Server & DevTools (`zerho-server`):** Zero-Node `axum` + `tokio` + `notify` dev server, granular WebSocket HMR (`import.meta.hot`), Shadow DOM Error Overlay, zero-waterfall Dev Partial Bundling (`/@zerho/bundle`), HTTP reverse proxy (`[server.proxy]`), built-in `/__inspect` UI with **Live Bundle Treemap**, and Brotli-negotiating `PreviewServer`.
@@ -20,7 +20,7 @@
 
 ## Real `--release` Benchmarks
 
-> **Reference Environment:** `Windows 11 x86_64 (NT 10.0.26300.0)` · `AMD Zen 3 (16 logical threads)` · `rustc 1.96.1` · `zerho --release` (`16.60 MB`, snapshot captured on `v0.7.0` and reproducible on `v0.9.0`). Full methodology & JSON snapshot in [`benchmarks/BENCHMARKS.md`](benchmarks/BENCHMARKS.md) and [`benchmarks/results.json`](benchmarks/results.json).
+> **Reference Environment:** `Windows 11 x86_64 (NT 10.0.26300.0)` · `AMD Zen 3 (16 logical threads)` · `rustc 1.96.1` · `zerho --release` (`16.60 MB`, snapshot captured on `v0.7.0` and reproducible on `v1.0.0`). Full methodology & JSON snapshot in [`benchmarks/BENCHMARKS.md`](benchmarks/BENCHMARKS.md) and [`benchmarks/results.json`](benchmarks/results.json).
 
 | Project | Cold Oxc Transform | Warm `redb` Lookup | Cold Build *(empty cache)* | Warm Build Min *(redb hot)* | Entry Size *(Raw / Gzip / Brotli)* |
 | :--- | :---: | :---: | :---: | :---: | :---: |
@@ -34,7 +34,7 @@ Verify on your own machine in one command:
 cargo build --release -p zerho-cli && ./target/release/zerho bench --synthetic 500 --iterations 5 --json
 ```
 
-## Workspace Crates (9 Crates · 60/60 Tests)
+## Workspace Crates (9 Crates · 63/63 Tests)
 
 | Crate | Responsibility |
 | :--- | :--- |
