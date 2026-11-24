@@ -23,6 +23,18 @@ pub fn compute_gzip_size(bytes: &[u8]) -> usize {
     encoder.finish().map_or(bytes.len(), |buf| buf.len())
 }
 
+/// Compresses bytes using pure-Rust Brotli (quality 6, window 22) for `.br` static asset emission.
+pub fn compress_brotli(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    {
+        let mut writer = brotli::CompressorWriter::new(&mut out, 4096, 6, 22);
+        if writer.write_all(bytes).is_err() {
+            return bytes.to_vec();
+        }
+    }
+    out
+}
+
 /// Scans an emitted client JS bundle for accidentally leaked credentials/private keys.
 pub fn scan_for_leaked_secrets(file_name: &str, content: &str) -> ZerhoResult<()> {
     const PATTERNS: &[(&str, &str)] = &[
@@ -151,6 +163,8 @@ mod tests {
             hash: ContentHash::from_bytes(b"js"),
             bytes: 120_000,
             gzip_bytes: 30_000,
+            brotli_bytes: 24_000,
+            brotli_file: None,
             sourcemap_file: None,
             integrity: None,
         }];

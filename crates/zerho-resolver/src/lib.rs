@@ -1,6 +1,9 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
-use oxc_resolver::{ResolveOptions, Resolver as InnerOxcResolver};
+use oxc_resolver::{
+    ResolveOptions, Resolver as InnerOxcResolver, TsconfigDiscovery, TsconfigOptions,
+    TsconfigReferences,
+};
 use zerho_core::{ModuleKind, ZerhoError, ZerhoResult};
 
 /// Output of module resolution.
@@ -35,7 +38,18 @@ impl fmt::Debug for OxcResolver {
 impl OxcResolver {
     pub fn new(root: impl Into<PathBuf>) -> Self {
         let root = root.into();
+        let root_tsconfig = root.join("tsconfig.json");
+        let tsconfig = if root_tsconfig.is_file() {
+            Some(TsconfigDiscovery::Manual(TsconfigOptions {
+                config_file: root_tsconfig,
+                references: TsconfigReferences::Auto,
+            }))
+        } else {
+            Some(TsconfigDiscovery::Auto)
+        };
+
         let options = ResolveOptions {
+            tsconfig,
             extensions: vec![
                 ".tsx".to_owned(),
                 ".ts".to_owned(),
@@ -141,5 +155,37 @@ mod tests {
             .resolve("/@zerho/client", None)
             .expect("internal client should resolve");
         assert!(module.is_virtual);
+    }
+
+    #[test]
+    fn resolves_tsconfig_paths_natively_without_plugins() {
+        let dir = std::env::temp_dir().join("zerho-resolver-tsconfig-paths-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src/utils")).expect("create src/utils");
+        std::fs::write(
+            dir.join("tsconfig.json"),
+            r#"{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  }
+}"#,
+        )
+        .expect("write tsconfig");
+        std::fs::write(dir.join("src/utils/math.ts"), "export const add = (a: number, b: number) => a + b;\n")
+            .expect("write math.ts");
+        std::fs::write(dir.join("src/main.ts"), "import { add } from '@/utils/math';\n")
+            .expect("write main.ts");
+
+        let resolver = OxcResolver::new(&dir);
+        let module = resolver
+            .resolve("@/utils/math", Some(&dir.join("src/main.ts")))
+            .expect("tsconfig @/* alias should resolve natively");
+        assert!(module.path.ends_with(Path::new("src").join("utils").join("math.ts")));
+        assert_eq!(module.kind, ModuleKind::Ts);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

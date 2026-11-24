@@ -5,13 +5,16 @@ const quickStartCode = `# Scaffold a React + TypeScript project in milliseconds
 zerho init my-app --template react-tsx
 cd my-app
 
-# Start the Zero-Node dev server (HMR + /__inspect DevTools)
+# Start the Zero-Node dev server (HMR + /@zerho/bundle + /__inspect)
 zerho dev
 
-# Build minified, tree-shaken production bundle + manifest.json
-zerho build
+# Audit the full module graph (broken imports, cycles, missing .env, secrets)
+zerho check
 
-# Preview the production dist/ output locally
+# Build scope-hoisted, minified, Brotli-compressed bundle + dist/stats.html
+zerho build --analyze
+
+# Preview the production dist/ output locally (serves .br automatically)
 zerho preview --port 4173`;
 
 const tomlReference = `[project]
@@ -27,16 +30,25 @@ host = "127.0.0.1"
 port = 5173
 hmr = true
 open = false
+partial_bundling = true      # zero-waterfall /@zerho/bundle in dev
 
 [server.proxy]
 "/api" = "http://127.0.0.1:8080"
 
 [build]
 out_dir = "dist"
-minify = true
+minify = true                # oxc_minifier constant folding + DCE + mangling
 sourcemap = "linked"         # none | linked | inline | hidden
 target = "es2022"
-splitting = true             # dynamic import() code splitting
+splitting = true             # dynamic import() + shared chunks + modulepreload
+brotli = true                # emit .br pre-compressed assets
+scope_hoisting = true        # flatten acyclic ESM without runtime wrappers
+analyze = false              # emit dist/stats.html interactive treemap
+
+[build.budgets]
+max_js_kb = 150
+max_css_kb = 40
+max_chunk_kb = 100
 
 [css]
 modules = true               # native *.module.css via lightningcss
@@ -44,7 +56,17 @@ minify = true
 
 [cache]
 enabled = true
-dir = ".zerho/cache"         # persistent blake3 content-addressed cache`;
+dir = ".zerho/cache"         # embedded ACID redb B-tree cache
+# remote_url = "http://127.0.0.1:9000/cache"
+# remote_token = "env:ZERHO_CACHE_TOKEN"
+
+[security]
+sri = true                   # SHA-384 integrity in index.html & manifest.json
+csp = true                   # emit strict dist/csp.json
+secret_scan = true           # fail build on leaked API keys / private keys
+
+[assets]
+optimize_svg = true          # pure-Rust SVG minification`;
 
 const hmrSnippet = `// Granular state-preserving HMR in any module
 let count = import.meta.hot?.data.count ?? 0;
@@ -126,18 +148,19 @@ world zerho-plugin {
 
 const cliCommands = [
   { cmd: 'zerho init [DIR] --template <NAME>', desc: 'Scaffold a Zero-Node project (basic-ts | react-tsx).' },
-  { cmd: 'zerho dev [--config PATH] [--port PORT]', desc: 'Start the axum + tokio dev server with WebSocket HMR, /@zerho/deps, and /__inspect UI.' },
-  { cmd: 'zerho build [--config PATH]', desc: 'Run two-pass symbol tree-shaking, code splitting, minification, Source Maps v3, and manifest.json emission.' },
-  { cmd: 'zerho preview [--config PATH] [--port PORT]', desc: 'Serve the production dist/ directory locally with PreviewServer.' },
-  { cmd: 'zerho bench [--config PATH] [--iterations N]', desc: 'Run reproducible cold Oxc transform, warm blake3 cache, and full build benchmarks (default: 10 iterations).' },
+  { cmd: 'zerho dev [--config PATH] [--port PORT]', desc: 'Start the axum + tokio dev server with WebSocket HMR, /@zerho/bundle, /@zerho/deps, and /__inspect UI.' },
+  { cmd: 'zerho build [--config PATH] [--analyze]', desc: 'Parallel rayon build with Scope Hoisting, oxc_minifier, redb cache, Shared Chunks + modulepreload, Brotli .br, SRI/CSP, and optional dist/stats.html.' },
+  { cmd: 'zerho check [--config PATH] [--strict]', desc: 'Audit the full module graph in milliseconds for broken imports, circular dependencies, missing .env vars, and leaked secrets.' },
+  { cmd: 'zerho preview [--config PATH] [--port PORT]', desc: 'Serve the production dist/ directory locally with automatic Accept-Encoding: br negotiation.' },
+  { cmd: 'zerho bench [--config PATH] [--iterations N]', desc: 'Run reproducible cold Oxc transform, warm redb cache, and full build benchmarks (default: 10 iterations).' },
   { cmd: 'zerho schema', desc: 'Print the complete JSON Schema for zerho.toml for IDE validation and autocompletion.' },
   { cmd: 'zerho wit', desc: 'Print the canonical zerho:plugin@0.1.0 WebAssembly Component Model WIT contract.' },
 ];
 ---
 
 <BaseLayout
-  title="Documentation — zerho v0.1.0"
-  description="Complete documentation for zerho: Quick Start, zerho.toml configuration reference, CLI commands, granular HMR, CSS Modules, .env & proxy, and the zerho:plugin@0.1.0 WASM WIT contract."
+  title="Documentation — zerho v0.6.0"
+  description="Complete documentation for zerho v0.6.0: Quick Start, zerho.toml configuration reference, CLI commands (dev, build, check, preview, bench), granular HMR, CSS Modules, .env & proxy, and the zerho:plugin@0.1.0 WASM WIT contract."
 >
   <div class="container docs-layout">
     <aside class="docs-sidebar" aria-label="Documentation sections">
@@ -157,7 +180,7 @@ const cliCommands = [
       <section id="quick-start">
         <div class="eyebrow" style="margin-bottom: 14px;">
           <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
-          <span>Documentation · v0.1.0</span>
+          <span>Documentation · v0.6.0</span>
         </div>
         <h1>zerho Documentation</h1>
         <p>

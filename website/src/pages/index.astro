@@ -6,61 +6,61 @@ const initCommand = 'zerho init my-app --template react-tsx && cd my-app && zerh
 const features = [
   {
     icon: 'bolt',
-    title: 'Oxc Native Compiler & Tree-Shaker',
-    desc: 'Sub-millisecond TS, JSX, React, Preact, and Solid transforms with AST import rewriting, two-pass symbol-level tree-shaking, and Source Maps v3.',
+    title: 'Oxc Compiler, Minifier & Scope Hoisting',
+    desc: 'Sub-millisecond TS/JSX transforms, lexical Scope Hoisting (zero runtime wrappers), AST constant folding/DCE, mangling, and Source Maps v3.',
   },
   {
     icon: 'layers',
-    title: 'LightningCSS & CSS Modules',
-    desc: 'Built-in CSS nesting, vendor prefixing, production minification, and native *.module.css scoped class maps with zero PostCSS config.',
+    title: 'LightningCSS, CSS Modules & SVG Optimizer',
+    desc: 'Built-in CSS nesting, vendor prefixing, *.module.css scoped class maps, and pure-Rust SVG optimization with zero PostCSS or Node plugins.',
   },
   {
     icon: 'hub',
-    title: 'Oxc Resolver & CJS-to-ESM Pre-Bundler',
-    desc: 'Native Node ESM/CJS resolution with automatic CommonJS-to-ESM pre-bundling served from /@zerho/deps — without invoking Node.js.',
+    title: 'Native tsconfig Paths & Barrel Optimizer',
+    desc: 'Zero-config @/* alias resolution via oxc_resolver plus AST Barrel File bypassing so unused re-exported modules are never loaded or parsed.',
   },
   {
     icon: 'speed',
-    title: 'Granular HMR & Shadow DOM Overlay',
-    desc: 'State-preserving import.meta.hot (accept, dispose, persistent data) paired with an isolated Shadow DOM <zerho-error-overlay> for instant diagnostics.',
+    title: 'Zero-Waterfall Dev & Granular HMR',
+    desc: 'In-memory Dev Partial Bundling (/@zerho/bundle), state-preserving import.meta.hot, and an isolated Shadow DOM <zerho-error-overlay>.',
   },
   {
     icon: 'database',
-    title: 'Persistent blake3 Disk Cache & /__inspect',
-    desc: 'Content-addressed .zerho/cache hits in 0.232 ms and an embedded /__inspect DevTools UI for live module graph and cache telemetry.',
+    title: 'Acid redb Cache + Remote Team Cache',
+    desc: 'Single-file embedded redb B-tree cache with HTTP remote team cache fallback (cache.remote_url) accelerating both zerho dev and zerho build.',
   },
   {
-    icon: 'extension',
-    title: 'Sandboxed Wasmtime Plugin Host',
-    desc: 'Fuel-metered WebAssembly plugins via wasmtime v29 implementing the zerho:plugin@0.1.0 WIT Component Model contract.',
+    icon: 'call_split',
+    title: 'Rayon Parallel Bundler & Shared Chunks',
+    desc: 'Multi-core parallel graph builds, automatic shared chunk deduplication across dynamic import(), <link rel="modulepreload">, and Brotli .br emission.',
   },
   {
     icon: 'shield',
-    title: '.env, HTTP Proxy & Static Assets',
-    desc: 'Prefix-filtered import.meta.env (ZERHO_*), declarative [server.proxy] reverse proxy, public/ passthrough, and blake3-hashed asset imports.',
+    title: 'Built-in SRI, CSP, Budgets & Secret Guard',
+    desc: 'Native SHA-384 integrity attributes, strict dist/csp.json, Gzip/Brotli bundle budgets, and client-side secret leak scanning before ship.',
   },
   {
-    icon: 'memory',
-    title: 'Single 12.65 MB Safe Rust Binary',
-    desc: 'Compiled with Rust Edition 2024, unsafe_code = "forbid", clippy::pedantic -D warnings, and zero runtime dependencies.',
+    icon: 'fact_check',
+    title: 'zerho check & dist/stats.html Analyzer',
+    desc: 'Full-graph static auditor catching broken imports, circular dependencies, and missing .env vars in milliseconds, plus an interactive HTML treemap.',
   },
   {
-    icon: 'terminal',
-    title: 'Instant Scaffolding & Built-in Bench',
-    desc: 'Bootstrap basic-ts or react-tsx apps in milliseconds with zerho init, and verify real local timings with zerho bench.',
+    icon: 'extension',
+    title: 'Safe Rust Binary & Wasmtime Plugins',
+    desc: 'Rust Edition 2024, unsafe_code = "forbid", clippy::pedantic -D warnings, and fuel-metered WASM plugins (zerho:plugin@0.1.0 WIT).',
   },
 ];
 
 const crates = [
   { name: 'zerho-core', desc: 'Core identifiers (ModuleId, blake3 ContentHash), ModuleKind, Framework, and typed error hierarchy.' },
-  { name: 'zerho-config', desc: 'Declarative zerho.toml parser, validator, serializer, and JSON Schema generator.' },
-  { name: 'zerho-resolver', desc: 'Native ESM/CJS module resolution powered by oxc_resolver, package.json exports, and virtual modules.' },
-  { name: 'zerho-graph', desc: 'Incremental module dependency graph with reverse-edge HMR invalidation and persistent DiskCache.' },
+  { name: 'zerho-config', desc: 'Declarative zerho.toml parser, validator, budgets/security/remote-cache config, and JSON Schema generator.' },
+  { name: 'zerho-resolver', desc: 'Native ESM/CJS & tsconfig.json paths resolution powered by oxc_resolver, package.json exports, and virtual modules.' },
+  { name: 'zerho-graph', desc: 'Incremental module graph, DFS circular dependency detector, embedded redb cache, and HTTP remote team cache.' },
   { name: 'zerho-plugin', desc: 'Native Plugin trait (DefinePlugin), fuel-metered wasmtime v29 host, and zerho:plugin@0.1.0 WIT contract.' },
-  { name: 'zerho-transform', desc: 'Oxc TS/JSX compiler, AST import rewriter, two-pass symbol tree-shaker, and lightningcss pipeline.' },
-  { name: 'zerho-server', desc: 'Zero-Node axum + tokio + notify dev server, WebSocket HMR, /@zerho/deps, /__inspect UI, and PreviewServer.' },
-  { name: 'zerho-bundler', desc: 'Production bundler with dynamic import() code splitting, minification, Source Maps v3, and manifest.json.' },
-  { name: 'zerho-cli', desc: 'Single native CLI binary: dev, build, preview, bench, init, schema, and wit.' },
+  { name: 'zerho-transform', desc: 'Oxc TS/JSX compiler, Minifier/Mangler, Scope Hoisting, Barrel Optimizer, SVG optimizer, and lightningcss pipeline.' },
+  { name: 'zerho-server', desc: 'Zero-Node axum + tokio + notify dev server, WebSocket HMR, /@zerho/bundle, /__inspect UI, and Brotli PreviewServer.' },
+  { name: 'zerho-bundler', desc: 'Rayon parallel bundler with incremental redb cache, Shared Chunks + modulepreload, Brotli .br, SRI/CSP, zerho check, and stats.html.' },
+  { name: 'zerho-cli', desc: 'Single native CLI binary: dev, build (--analyze), check (--strict), preview, bench, init, schema, and wit.' },
 ];
 ---
 
@@ -73,7 +73,7 @@ const crates = [
     <div class="container">
       <div class="eyebrow">
         <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
-        <span>v0.1.0 · Single 12.65 MB Binary · Zero Node.js Runtime</span>
+        <span>v0.6.0 · Scope Hoisting · redb + Remote Cache · Zero Node.js Runtime</span>
       </div>
 
       <h1>

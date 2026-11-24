@@ -139,12 +139,16 @@ impl SourceMapMode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct BuildConfig {
     pub out_dir: PathBuf,
     pub minify: bool,
     pub sourcemap: SourceMapMode,
     pub target: String,
     pub splitting: bool,
+    pub brotli: bool,
+    pub scope_hoisting: bool,
+    pub analyze: bool,
     pub budgets: BudgetsConfig,
 }
 
@@ -156,6 +160,9 @@ impl Default for BuildConfig {
             sourcemap: SourceMapMode::Linked,
             target: "es2022".to_owned(),
             splitting: true,
+            brotli: true,
+            scope_hoisting: true,
+            analyze: false,
             budgets: BudgetsConfig::default(),
         }
     }
@@ -177,11 +184,20 @@ impl Default for CssConfig {
 pub struct CacheConfig {
     pub enabled: bool,
     pub dir: PathBuf,
+    /// Optional HTTP/S3-compatible remote team cache base URL (e.g. `http://127.0.0.1:9000/cache`).
+    pub remote_url: Option<String>,
+    /// Optional bearer token (or env var reference) for authenticating with `remote_url`.
+    pub remote_token: Option<String>,
 }
 
 impl Default for CacheConfig {
     fn default() -> Self {
-        Self { enabled: true, dir: PathBuf::from(".zerho/cache") }
+        Self {
+            enabled: true,
+            dir: PathBuf::from(".zerho/cache"),
+            remote_url: None,
+            remote_token: None,
+        }
     }
 }
 
@@ -196,6 +212,7 @@ impl ZerhoConfig {
     }
 
     /// Parses declarative `zerho.toml` content into a validated [`ZerhoConfig`].
+    #[allow(clippy::too_many_lines)]
     pub fn parse_toml(input: &str) -> ZerhoResult<Self> {
         let mut config = Self::default();
         let mut section = String::new();
@@ -261,6 +278,11 @@ impl ZerhoConfig {
                 }
                 ("build", "target") => config.build.target = parse_string(value, line_no)?,
                 ("build", "splitting") => config.build.splitting = parse_bool(value, line_no)?,
+                ("build", "brotli") => config.build.brotli = parse_bool(value, line_no)?,
+                ("build", "scope_hoisting") => {
+                    config.build.scope_hoisting = parse_bool(value, line_no)?;
+                }
+                ("build", "analyze") => config.build.analyze = parse_bool(value, line_no)?,
                 ("build.budgets", "max_js_kb") => {
                     config.build.budgets.max_js_kb = Some(parse_u64(value, line_no)?);
                 }
@@ -275,6 +297,12 @@ impl ZerhoConfig {
                 ("cache", "enabled") => config.cache.enabled = parse_bool(value, line_no)?,
                 ("cache", "dir") => {
                     config.cache.dir = PathBuf::from(parse_string(value, line_no)?);
+                }
+                ("cache", "remote_url") => {
+                    config.cache.remote_url = Some(parse_string(value, line_no)?);
+                }
+                ("cache", "remote_token") => {
+                    config.cache.remote_token = Some(parse_string(value, line_no)?);
                 }
                 ("security", "sri") => config.security.sri = parse_bool(value, line_no)?,
                 ("security", "csp") => config.security.csp = parse_bool(value, line_no)?,
@@ -326,7 +354,9 @@ impl ZerhoConfig {
              minify = {}\n\
              sourcemap = \"{}\"\n\
              target = \"{}\"\n\
-             splitting = {}\n\n\
+             splitting = {}\n\
+             brotli = {}\n\
+             scope_hoisting = {}\n\n\
              [css]\n\
              modules = {}\n\
              minify = {}\n\n\
@@ -348,11 +378,19 @@ impl ZerhoConfig {
             self.build.sourcemap.as_str(),
             self.build.target,
             self.build.splitting,
+            self.build.brotli,
+            self.build.scope_hoisting,
             self.css.modules,
             self.css.minify,
             self.cache.enabled,
             self.cache.dir.display(),
         );
+        if let Some(remote_url) = &self.cache.remote_url {
+            let _ = writeln!(out, "remote_url = \"{remote_url}\"");
+        }
+        if let Some(remote_token) = &self.cache.remote_token {
+            let _ = writeln!(out, "remote_token = \"{remote_token}\"");
+        }
         if !self.server.proxy.is_empty() {
             out.push_str("\n[server.proxy]\n");
             for (prefix, target) in &self.server.proxy {
@@ -400,7 +438,9 @@ impl ZerhoConfig {
         "minify": { "type": "boolean", "default": true },
         "sourcemap": { "type": "string", "enum": ["none", "linked", "inline", "hidden"], "default": "linked" },
         "target": { "type": "string", "default": "es2022" },
-        "splitting": { "type": "boolean", "default": true }
+        "splitting": { "type": "boolean", "default": true },
+        "brotli": { "type": "boolean", "default": true },
+        "scope_hoisting": { "type": "boolean", "default": true }
       }
     },
     "css": {
@@ -414,7 +454,9 @@ impl ZerhoConfig {
       "type": "object",
       "properties": {
         "enabled": { "type": "boolean", "default": true },
-        "dir": { "type": "string", "default": ".zerho/cache" }
+        "dir": { "type": "string", "default": ".zerho/cache" },
+        "remote_url": { "type": "string" },
+        "remote_token": { "type": "string" }
       }
     }
   }
@@ -566,6 +608,8 @@ mod tests {
             .server
             .proxy
             .insert("/api".to_owned(), "http://127.0.0.1:8080".to_owned());
+        original.cache.remote_url = Some("http://127.0.0.1:9000/cache".to_owned());
+        original.cache.remote_token = Some("env:ZERHO_CACHE_TOKEN".to_owned());
         let serialized = original.to_toml();
         let parsed = ZerhoConfig::parse_toml(&serialized).expect("default config should parse");
         assert_eq!(original, parsed);

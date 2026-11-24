@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 use scaffold::{Template, scaffold_project};
-use zerho_bundler::Bundler;
+use zerho_bundler::{Bundler, run_project_check};
 use zerho_config::ZerhoConfig;
 use zerho_core::{ModuleKind, ZerhoError, ZerhoResult};
 use zerho_graph::{CachedArtifact, DiskCache};
@@ -53,6 +53,7 @@ async fn run(args: &[String]) -> ZerhoResult<()> {
         "init" => cmd_init(&args[1..]),
         "dev" => cmd_dev(&args[1..]).await,
         "build" => cmd_build(&args[1..]),
+        "check" => cmd_check(&args[1..]),
         "preview" => cmd_preview(&args[1..]).await,
         "bench" => cmd_bench(&args[1..]),
         other => Err(ZerhoError::Config(format!(
@@ -95,13 +96,28 @@ async fn cmd_dev(flags: &[String]) -> ZerhoResult<()> {
 }
 
 fn cmd_build(flags: &[String]) -> ZerhoResult<()> {
-    let config = load_or_default(find_flag_value(flags, "--config"))?;
+    let mut config = load_or_default(find_flag_value(flags, "--config"))?;
+    if flags.iter().any(|f| f == "--analyze") {
+        config.build.analyze = true;
+    }
     let mut bundler = Bundler::new(config);
     let output = bundler.build()?;
+    let mode_tag = if output.scope_hoisted {
+        "scope-hoisted"
+    } else {
+        "registry"
+    };
+    let barrel_tag = if output.barrel_imports_bypassed > 0 {
+        format!(", {} barrels bypassed", output.barrel_imports_bypassed)
+    } else {
+        String::new()
+    };
     println!(
-        "zerho build complete ({} modules, {} dead exports shaken) -> {}",
+        "zerho build complete ({} modules, {} dead exports shaken{barrel_tag}, cache: {} hits/{} misses, {mode_tag}) -> {}",
         output.module_count,
         output.tree_shaken_exports,
+        output.cache_hits,
+        output.cache_misses,
         output.out_dir.display()
     );
     for chunk in output.chunks {
@@ -111,16 +127,64 @@ fn cmd_build(flags: &[String]) -> ZerhoResult<()> {
             chunk.gzip_bytes / 1024,
             (chunk.gzip_bytes % 1024) * 100 / 1024
         );
+        let br_kb = format!(
+            "{}.{:02} KB",
+            chunk.brotli_bytes / 1024,
+            (chunk.brotli_bytes % 1024) * 100 / 1024
+        );
         let sri_tag = chunk
             .integrity
             .as_ref()
             .map_or_else(String::new, |s| format!("  [{}..]", &s[..15.min(s.len())]));
         match chunk.sourcemap_file {
             Some(map) => {
-                println!("  {}  {raw_kb} | gzip: {gz_kb}  (+ {map}){sri_tag}", chunk.file_name);
+                println!(
+                    "  {}  {raw_kb} | gzip: {gz_kb} | br: {br_kb}  (+ {map}){sri_tag}",
+                    chunk.file_name
+                );
             }
-            None => println!("  {}  {raw_kb} | gzip: {gz_kb}{sri_tag}", chunk.file_name),
+            None => println!(
+                "  {}  {raw_kb} | gzip: {gz_kb} | br: {br_kb}{sri_tag}",
+                chunk.file_name
+            ),
         }
+    }
+    if let Some(stats_path) = output.stats_file {
+        println!("  bundle analyzer -> {}", stats_path.display());
+    }
+    Ok(())
+}
+
+fn cmd_check(flags: &[String]) -> ZerhoResult<()> {
+    let config = load_or_default(find_flag_value(flags, "--config"))?;
+    let strict = flags.iter().any(|f| f == "--strict");
+    let report = run_project_check(&config)?;
+
+    for issue in &report.issues {
+        println!(
+            "  [{}] ({}) {} — {}",
+            issue.severity.as_str(),
+            issue.code,
+            issue.file,
+            issue.message
+        );
+    }
+
+    let errors = report.error_count();
+    let warnings = report.warning_count();
+    println!(
+        "zerho check finished in {} ms ({} modules, {} cycles, {} errors, {} warnings)",
+        report.elapsed_ms,
+        report.modules_checked,
+        report.cycles.len(),
+        errors,
+        warnings
+    );
+
+    if errors > 0 || (strict && warnings > 0) {
+        return Err(ZerhoError::Config(format!(
+            "zerho check failed with {errors} error(s) and {warnings} warning(s)"
+        )));
     }
     Ok(())
 }
@@ -279,8 +343,9 @@ fn print_help() {
            zerho <COMMAND> [OPTIONS]\n\n\
          COMMANDS:\n\
            dev       Start the native dev server with HMR and /__inspect UI\n\
-           build     Build production bundle (minified JS/CSS + manifest.json)\n\
-           preview   Preview the production build locally\n\
+           build     Build production bundle (scope-hoisted JS/CSS, Brotli, SRI, manifest)\n\
+           check     Audit module graph for broken imports, cycles, missing .env, and secrets\n\
+           preview   Preview the production build locally (serves pre-compressed .br)\n\
            bench     Run reproducible transform, cache, and build benchmarks\n\
            init [DIR]  Scaffold a Zero-Node project (--template basic-ts | react-tsx)\n\
            schema      Print the JSON Schema for zerho.toml\n\
@@ -290,6 +355,8 @@ fn print_help() {
            --template <NAME>     Template for `zerho init` (basic-ts | react-tsx)\n\
            --config <PATH>       Path to zerho.toml (default: ./zerho.toml)\n\
            --port <PORT>         Override dev/preview server port\n\
+           --analyze             Emit interactive dist/stats.html Bundle Analyzer on build\n\
+           --strict              Fail `zerho check` on warnings as well as errors\n\
            --iterations <N>      Number of iterations for `zerho bench` (default: 10)\n\
            -V, --version         Print version"
     );

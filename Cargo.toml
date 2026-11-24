@@ -13,7 +13,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.6.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -32,15 +32,36 @@ zerho-bundler = { path = "crates/zerho-bundler" }
 
 # Phase 1 native Rust toolchain crates
 blake3 = "1"
-oxc = { version = "0.143", default-features = false, features = ["ast_visit", "semantic", "transformer", "codegen"] }
+oxc = { version = "0.143", default-features = false, features = [
+    "ast_visit",
+    "semantic",
+    "transformer",
+    "codegen",
+    "minifier",
+    "mangler",
+] }
 oxc_resolver = "11"
 lightningcss = "1.0.0-alpha.72"
 axum = { version = "0.8", features = ["ws"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "fs", "signal", "io-util"] }
+tokio = { version = "1", features = [
+    "macros",
+    "rt-multi-thread",
+    "net",
+    "sync",
+    "fs",
+    "signal",
+    "io-util",
+] }
 notify = "8"
-wasmtime = { version = "29", default-features = false, features = ["cranelift", "runtime"] }
+wasmtime = { version = "29", default-features = false, features = [
+    "cranelift",
+    "runtime",
+] }
 sha2 = "0.10"
 flate2 = "1"
+brotli = { version = "8", default-features = false, features = ["std"] }
+rayon = "1"
+redb = "2"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

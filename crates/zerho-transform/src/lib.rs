@@ -1,7 +1,7 @@
+pub mod barrel;
+pub mod scope_hoist;
 pub mod svg;
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
 use lightningcss::css_modules::Config as CssModulesConfig;
 use lightningcss::stylesheet::{MinifyOptions, ParserOptions, PrinterOptions, StyleSheet};
 use oxc::allocator::Allocator;
@@ -11,13 +11,18 @@ use oxc::ast::ast::{
 };
 use oxc::ast_visit::Visit;
 use oxc::codegen::{Codegen, CodegenOptions};
+use oxc::minifier::{CompressOptions, MangleOptions, Minifier, MinifierOptions};
 use oxc::parser::Parser;
 use oxc::semantic::SemanticBuilder;
 use oxc::span::{SourceType, Span};
 use oxc::transformer::{JsxOptions, JsxRuntime, TransformOptions, Transformer};
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 use zerho_core::{ContentHash, Framework, ModuleKind, ZerhoError, ZerhoResult};
 use zerho_plugin::{PluginContext, PluginRegistry};
 
+pub use barrel::{BarrelExport, parse_pure_barrel, rewrite_barrel_imports};
+pub use scope_hoist::{HoistedModuleInput, try_scope_hoist_bundle};
 pub use svg::optimize_svg;
 
 /// Input to the native transform pipeline.
@@ -54,16 +59,22 @@ impl TransformPipeline {
     }
 
     pub fn transform(&self, input: &TransformInput) -> ZerhoResult<TransformOutput> {
-        let ctx = PluginContext { is_dev: input.is_dev };
+        let ctx = PluginContext {
+            is_dev: input.is_dev,
+        };
         let id = input.path.to_string_lossy();
-        let after_plugins = self
-            .plugins
-            .run_transform(input.source.clone(), &id, input.kind, &ctx)?;
+        let after_plugins =
+            self.plugins
+                .run_transform(input.source.clone(), &id, input.kind, &ctx)?;
 
         let (transformed_code, imports, css_exports) = match input.kind {
             ModuleKind::Js | ModuleKind::Ts | ModuleKind::Jsx | ModuleKind::Tsx => {
-                let (code, imports) =
-                    transform_script(&input.path, &after_plugins.code, input.framework, input.is_dev)?;
+                let (code, imports) = transform_script(
+                    &input.path,
+                    &after_plugins.code,
+                    input.framework,
+                    input.is_dev,
+                )?;
                 (code, imports, None)
             }
             ModuleKind::Css => {
@@ -136,8 +147,8 @@ fn transform_script(
         ..TransformOptions::default()
     };
 
-    let ret = Transformer::new(&allocator, path, &options)
-        .build_with_scoping(scoping, &mut program);
+    let ret =
+        Transformer::new(&allocator, path, &options).build_with_scoping(scoping, &mut program);
 
     if !ret.diagnostics.is_empty() {
         let messages: Vec<String> = ret.diagnostics.iter().map(ToString::to_string).collect();
@@ -296,10 +307,7 @@ pub fn lower_esm_for_bundle(
     Ok(output)
 }
 
-fn lower_import_decl(
-    decl: &oxc::ast::ast::ImportDeclaration<'_>,
-    dep_id: Option<&str>,
-) -> String {
+fn lower_import_decl(decl: &oxc::ast::ast::ImportDeclaration<'_>, dep_id: Option<&str>) -> String {
     let Some(dep_id) = dep_id else {
         return String::new();
     };
@@ -396,7 +404,8 @@ pub fn finalize_js_bundle(js_code: &str, minify: bool) -> ZerhoResult<String> {
     Ok(code)
 }
 
-/// Minifies or formats a JavaScript bundle and optionally emits a Source Map v3 JSON string via `oxc_codegen`.
+/// Minifies (AST constant folding, DCE, identifier mangling) or formats a JavaScript bundle
+/// and optionally emits a Source Map v3 JSON string via `oxc_minifier` + `oxc_codegen`.
 pub fn finalize_js_bundle_with_map(
     js_code: &str,
     file_name: &str,
@@ -413,12 +422,28 @@ pub fn finalize_js_bundle_with_map(
         });
     }
 
+    let mut program = parsed.program;
+    let scoping = if minify {
+        let min_opts = MinifierOptions {
+            mangle: Some(MangleOptions::default()),
+            compress: Some(CompressOptions::default()),
+        };
+        Minifier::new(min_opts)
+            .minify(&allocator, &mut program)
+            .scoping
+    } else {
+        None
+    };
+
     let options = CodegenOptions {
         minify,
         source_map_path: emit_map.then(|| PathBuf::from(file_name)),
         ..CodegenOptions::default()
     };
-    let built = Codegen::new().with_options(options).build(&parsed.program);
+    let built = Codegen::new()
+        .with_options(options)
+        .with_scoping(scoping)
+        .build(&program);
     let map_json = built.map.map(|m| m.to_json_string());
     Ok((built.code, map_json))
 }
@@ -448,7 +473,9 @@ pub fn collect_dynamic_imports(js_code: &str, path: &Path) -> ZerhoResult<Vec<St
         });
     }
 
-    let mut collector = DynamicImportCollector { imports: Vec::new() };
+    let mut collector = DynamicImportCollector {
+        imports: Vec::new(),
+    };
     collector.visit_program(&parsed.program);
     Ok(collector.imports.into_iter().map(|(_, s)| s).collect())
 }
@@ -469,7 +496,9 @@ pub fn rewrite_dynamic_imports(
         });
     }
 
-    let mut collector = DynamicImportCollector { imports: Vec::new() };
+    let mut collector = DynamicImportCollector {
+        imports: Vec::new(),
+    };
     collector.visit_program(&parsed.program);
 
     let mut edits: Vec<(Span, String)> = Vec::new();
@@ -522,8 +551,16 @@ pub fn encode_base64(input: &[u8]) -> String {
     let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
     for chunk in input.chunks(3) {
         let b0 = u32::from(chunk[0]);
-        let b1 = if chunk.len() > 1 { u32::from(chunk[1]) } else { 0 };
-        let b2 = if chunk.len() > 2 { u32::from(chunk[2]) } else { 0 };
+        let b1 = if chunk.len() > 1 {
+            u32::from(chunk[1])
+        } else {
+            0
+        };
+        let b2 = if chunk.len() > 2 {
+            u32::from(chunk[2])
+        } else {
+            0
+        };
         let triple = (b0 << 16) | (b1 << 8) | b2;
 
         out.push(TABLE[((triple >> 18) & 0x3f) as usize] as char);
@@ -698,7 +735,9 @@ pub fn prune_unused_exports(
     // any candidate export referenced by a live statement (transitive intra-module dependencies).
     let mut dead_indices: BTreeSet<usize> = candidate_dead.iter().map(|(i, _, _)| *i).collect();
     loop {
-        let mut live_refs = IdentRefCollector { refs: BTreeSet::new() };
+        let mut live_refs = IdentRefCollector {
+            refs: BTreeSet::new(),
+        };
         for (idx, stmt) in parsed.program.body.iter().enumerate() {
             if !dead_indices.contains(&idx) {
                 live_refs.visit_statement(stmt);
@@ -812,7 +851,10 @@ fn transform_css(path: &Path, source: &str, minify: bool) -> ZerhoResult<CssTran
     }
 
     let printed = stylesheet
-        .to_css(PrinterOptions { minify, ..PrinterOptions::default() })
+        .to_css(PrinterOptions {
+            minify,
+            ..PrinterOptions::default()
+        })
         .map_err(|err| ZerhoError::Transform {
             path: path.to_path_buf(),
             reason: err.to_string(),
@@ -1040,12 +1082,15 @@ export const DEAD_CONST = "DEAD_CONST_MARKER";
             })
             .expect("css module transform should succeed");
 
-        let exports = out.css_exports.expect("css module should produce exports map");
+        let exports = out
+            .css_exports
+            .expect("css module should produce exports map");
         let scoped_card = exports.get("card").expect("card class should be exported");
         assert_ne!(scoped_card, "card");
         assert!(out.code.contains(scoped_card));
 
-        let hmr = wrap_css_with_exports_as_hmr_module("/src/card.module.css", &out.code, Some(&exports));
+        let hmr =
+            wrap_css_with_exports_as_hmr_module("/src/card.module.css", &out.code, Some(&exports));
         assert!(hmr.contains(&format!("\"card\":\"{scoped_card}\"")));
     }
 }

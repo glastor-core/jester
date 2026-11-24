@@ -68,7 +68,12 @@ impl DevServer {
         } else {
             root.join(&config.cache.dir)
         };
-        let cache = DiskCache::new(cache_dir, config.cache.enabled);
+        let cache = DiskCache::with_remote(
+            cache_dir,
+            config.cache.enabled,
+            config.cache.remote_url.as_deref(),
+            config.cache.remote_token.as_deref(),
+        );
         let resolver = OxcResolver::new(&root);
         let (hmr_tx, _) = broadcast::channel(64);
         let state = Arc::new(ServerState {
@@ -225,41 +230,75 @@ impl PreviewServer {
     }
 }
 
-async fn serve_preview_index(State(dist): State<Arc<PathBuf>>) -> Response {
-    serve_static_file(&dist, &dist.join("index.html")).await
+async fn serve_preview_index(
+    headers: axum::http::HeaderMap,
+    State(dist): State<Arc<PathBuf>>,
+) -> Response {
+    let accepts_br = accepts_brotli(&headers);
+    serve_static_file(&dist, &dist.join("index.html"), accepts_br).await
 }
 
 async fn serve_preview_asset(
     AxumPath(req_path): AxumPath<String>,
+    headers: axum::http::HeaderMap,
     State(dist): State<Arc<PathBuf>>,
 ) -> Response {
+    let accepts_br = accepts_brotli(&headers);
     let candidate = dist.join(req_path.trim_start_matches('/'));
     if candidate.is_file() {
-        serve_static_file(&dist, &candidate).await
+        serve_static_file(&dist, &candidate, accepts_br).await
     } else {
-        serve_static_file(&dist, &dist.join("index.html")).await
+        serve_static_file(&dist, &dist.join("index.html"), accepts_br).await
     }
 }
 
-async fn serve_static_file(dist_root: &Path, target: &Path) -> Response {
+fn accepts_brotli(headers: &axum::http::HeaderMap) -> bool {
+    headers
+        .get(header::ACCEPT_ENCODING)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|enc| enc.split(',').any(|part| part.trim().starts_with("br")))
+}
+
+async fn serve_static_file(dist_root: &Path, target: &Path, accepts_br: bool) -> Response {
     let Ok(canonical) = target.canonicalize() else {
         return (StatusCode::NOT_FOUND, "not found").into_response();
     };
     if !canonical.starts_with(dist_root) {
         return (StatusCode::FORBIDDEN, "forbidden").into_response();
     }
-    let Ok(bytes) = tokio::fs::read(&canonical).await else {
-        return (StatusCode::NOT_FOUND, "not found").into_response();
-    };
     let content_type = match canonical.extension().and_then(|e| e.to_str()) {
         Some("html") => "text/html; charset=utf-8",
         Some("js" | "mjs") => "application/javascript; charset=utf-8",
         Some("css") => "text/css; charset=utf-8",
-        Some("json") => "application/json; charset=utf-8",
+        Some("json" | "map") => "application/json; charset=utf-8",
         Some("svg") => "image/svg+xml",
         Some("png") => "image/png",
         Some("webp") => "image/webp",
         _ => "application/octet-stream",
+    };
+
+    if accepts_br {
+        let mut br_os = canonical.as_os_str().to_os_string();
+        br_os.push(".br");
+        let br_path = PathBuf::from(br_os);
+        if br_path.is_file()
+            && let Ok(br_bytes) = tokio::fs::read(&br_path).await
+        {
+            return (
+                StatusCode::OK,
+                [
+                    (header::CONTENT_TYPE, HeaderValue::from_static(content_type)),
+                    (header::CONTENT_ENCODING, HeaderValue::from_static("br")),
+                    (header::VARY, HeaderValue::from_static("Accept-Encoding")),
+                ],
+                br_bytes,
+            )
+                .into_response();
+        }
+    }
+
+    let Ok(bytes) = tokio::fs::read(&canonical).await else {
+        return (StatusCode::NOT_FOUND, "not found").into_response();
     };
     (
         StatusCode::OK,
@@ -445,12 +484,13 @@ async fn serve_inspect_api(State(state): State<Arc<ServerState>>) -> Response {
     );
     let cache = state.cache.stats();
     let body = format!(
-        "{{\"project\":\"{}\",\"framework\":\"{}\",\"modules\":{},\"edges\":{},\"cache_hits\":{},\"cache_misses\":{},\"partial_bundling\":{},\"items\":{items_json}}}",
+        "{{\"project\":\"{}\",\"framework\":\"{}\",\"modules\":{},\"edges\":{},\"cache_hits\":{},\"cache_remote_hits\":{},\"cache_misses\":{},\"partial_bundling\":{},\"items\":{items_json}}}",
         state.config.project.name,
         state.config.project.framework,
         metrics.module_count,
         metrics.edge_count,
         cache.hits,
+        cache.remote_hits,
         cache.misses,
         state.config.server.partial_bundling
     );
@@ -663,7 +703,7 @@ async fn serve_module(
     // 2. Serve static files from `project.public_dir` if present (e.g. `/logo.svg`, `/favicon.ico`).
     let public_candidate = state.public_dir.join(req_path.trim_start_matches('/'));
     if public_candidate.is_file() {
-        return serve_static_file(&state.public_dir, &public_candidate).await;
+        return serve_static_file(&state.public_dir, &public_candidate, false).await;
     }
 
     let resolved = match state.resolver.resolve(&clean_specifier, None) {
@@ -693,7 +733,7 @@ async fn serve_module(
                 "no-cache",
             );
         }
-        return serve_static_file(&state.root, &canonical).await;
+        return serve_static_file(&state.root, &canonical, false).await;
     }
 
     let Ok(source) = tokio::fs::read_to_string(&canonical).await else {

@@ -139,6 +139,68 @@ impl ModuleGraph {
         list.sort_by(|a, b| a.path.cmp(&b.path));
         list
     }
+
+    /// Detects all directed dependency cycles in the module graph (DFS 3-color traversal)
+    /// and returns deterministic path chains (e.g. `[A, B, A]`).
+    pub fn find_cycles(&self) -> Vec<Vec<PathBuf>> {
+        // 0 = unvisited, 1 = visiting (on stack), 2 = done
+        let mut state: HashMap<ModuleId, u8> = HashMap::new();
+        let mut stack: Vec<ModuleId> = Vec::new();
+        let mut seen_signatures: HashSet<Vec<PathBuf>> = HashSet::new();
+        let mut cycles: Vec<Vec<PathBuf>> = Vec::new();
+
+        let mut ordered_ids: Vec<ModuleId> = self.nodes.values().map(|n| n.id).collect();
+        ordered_ids.sort_by(|a, b| {
+            let pa = self.nodes.get(a).map(|n| &n.path);
+            let pb = self.nodes.get(b).map(|n| &n.path);
+            pa.cmp(&pb)
+        });
+
+        for start in ordered_ids {
+            if state.get(&start).copied().unwrap_or(0) == 0 {
+                self.dfs_cycles(start, &mut state, &mut stack, &mut seen_signatures, &mut cycles);
+            }
+        }
+        cycles
+    }
+
+    fn dfs_cycles(
+        &self,
+        current: ModuleId,
+        state: &mut HashMap<ModuleId, u8>,
+        stack: &mut Vec<ModuleId>,
+        seen_signatures: &mut HashSet<Vec<PathBuf>>,
+        cycles: &mut Vec<Vec<PathBuf>>,
+    ) {
+        state.insert(current, 1);
+        stack.push(current);
+
+        if let Some(node) = self.nodes.get(&current) {
+            for &dep in &node.imports {
+                match state.get(&dep).copied().unwrap_or(0) {
+                    0 => self.dfs_cycles(dep, state, stack, seen_signatures, cycles),
+                    1 => {
+                        if let Some(pos) = stack.iter().position(|&id| id == dep) {
+                            let mut chain: Vec<PathBuf> = stack[pos..]
+                                .iter()
+                                .filter_map(|id| self.nodes.get(id).map(|n| n.path.clone()))
+                                .collect();
+                            if let Some(first) = chain.first().cloned() {
+                                chain.push(first);
+                            }
+                            if seen_signatures.insert(chain.clone()) {
+                                cycles.push(chain);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        stack.pop();
+        state.insert(current, 2);
+    }
 }
 
 #[cfg(test)]
@@ -192,5 +254,29 @@ mod tests {
         // App stops importing dep.
         graph.upsert_module(app, PathBuf::from("src/App.tsx"), ModuleKind::Tsx, ContentHash::from_bytes(b"2"), []);
         assert_eq!(graph.invalidate(dep), vec![dep]);
+    }
+
+    #[test]
+    fn detects_circular_dependency_cycles() {
+        let mut graph = ModuleGraph::new();
+        let a = ModuleId::from_specifier("src/a.ts");
+        let b = ModuleId::from_specifier("src/b.ts");
+        let c = ModuleId::from_specifier("src/c.ts");
+
+        graph.upsert_module(a, PathBuf::from("src/a.ts"), ModuleKind::Ts, ContentHash::from_bytes(b"a"), [b]);
+        graph.upsert_module(b, PathBuf::from("src/b.ts"), ModuleKind::Ts, ContentHash::from_bytes(b"b"), [c]);
+        graph.upsert_module(c, PathBuf::from("src/c.ts"), ModuleKind::Ts, ContentHash::from_bytes(b"c"), [a]);
+
+        let cycles = graph.find_cycles();
+        assert_eq!(cycles.len(), 1);
+        assert_eq!(
+            cycles[0],
+            vec![
+                PathBuf::from("src/a.ts"),
+                PathBuf::from("src/b.ts"),
+                PathBuf::from("src/c.ts"),
+                PathBuf::from("src/a.ts"),
+            ]
+        );
     }
 }
