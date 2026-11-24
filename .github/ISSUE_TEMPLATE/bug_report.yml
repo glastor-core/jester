@@ -1,0 +1,82 @@
+name: "🐛 Reporte de Bug"
+description: "Reporta un problema técnico, falso positivo/negativo o anomalía en GLASTOR® pii-veil"
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por tomarte el tiempo de reportar este problema en **GLASTOR® pii-veil**.
+        ⚠️ **Importante:** Utiliza únicamente datos ficticios o sintéticos en los ejemplos de reproducción (nunca incluyas datos personales ni claves reales).
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: "Descripción del fallo"
+      description: "Explica de forma concisa qué falló o qué comportamiento anómalo se presentó."
+      placeholder: "Ejemplo: El detector de IBAN rechaza un código válido con espacios o StreamingRestorer no recompone un token partido..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: module_area
+    attributes:
+      label: "Módulo o Componente Afectado"
+      description: "¿Qué área de pii-veil presentó el problema?"
+      options:
+        - "Detectores Regex & Checksums Luhn/Mod-97/Mod-23/Mod-11 (detector.rs)"
+        - "Estrategias Placeholder / Synthetic / Mask (strategy.rs)"
+        - "Vault, Cifrado --vault-pass y StreamingRestorer SSE (vault.rs)"
+        - "Streaming O(1) para Lines, NDJSON, SQL y CSV (stream.rs)"
+        - "Motor de Políticas veil.json (policy.rs)"
+        - "CLI veil (main.rs)"
+        - "Servidor Model Context Protocol - veil mcp (mcp.rs)"
+        - "Proxy Reverso HTTP/SSE - veil proxy (proxy.rs)"
+        - "C-ABI FFI y pii_veil.h (crates/veil-ffi)"
+        - "Bindings Python PyO3 (crates/veil-py)"
+        - "Bindings Node.js / TypeScript napi-rs (crates/veil-node)"
+        - "SDK de Go y Middleware net/http (sdks/go)"
+        - "Otro / General"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: channel
+    attributes:
+      label: "Canal / Ecosistema de Ejecución"
+      description: "¿Desde qué lenguaje o herramienta estabas ejecutando pii-veil?"
+      options:
+        - "Rust Library (pii-veil-core)"
+        - "CLI / Terminal (veil)"
+        - "MCP Client (Claude Desktop / Cursor / Windsurf)"
+        - "HTTP/SSE Proxy (veil proxy)"
+        - "Python (pii-veil)"
+        - "Node.js / TypeScript (@pii-veil/node)"
+        - "Go SDK (github.com/glastor-core/pii-veil/sdks/go)"
+        - "C / C++ / cgo FFI (pii-veil-ffi)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Pasos para reproducir (usando datos sintéticos)"
+      description: "Código o comando mínimo reproducible para replicar el problema."
+      placeholder: |
+        1. Ejecutar `veil redact --text "Correo ficticio test@fintech.io..."`
+        2. Llamar a `vault.restore(...)`
+        3. Observar el resultado inesperado...
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Entorno de Ejecución"
+      description: "Versión de veil/rustc/Go/Python/Node y sistema operativo."
+      placeholder: |
+        - veil version: 0.1.0
+        - rustc / runtime: rustc 1.96.1 / Go 1.22 / Python 3.12 / Node 22
+        - OS: Ubuntu 24.04 / Windows 11 / macOS 15
+    validations:
+      required: true

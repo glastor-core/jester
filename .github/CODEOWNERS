@@ -1,0 +1,48 @@
+# ==============================================================================
+# GLASTOR Core pii-veil - CODEOWNERS CONFIGURATION
+# ==============================================================================
+# Purpose: Define code ownership and mandatory review protocols.
+# Reference: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# ==============================================================================
+
+# [ GLOBAL MAINTAINERS ]
+* @glastor-core @glastor-dev
+
+# [ CI/CD INFRASTRUCTURE & WORKFLOWS ]
+.github/ @glastor-core @glastor-dev
+action.yml @glastor-core @glastor-dev
+Cargo.toml @glastor-core @glastor-dev
+Cargo.lock @glastor-core @glastor-dev
+
+# [ CORE DLP ENGINE, DETECTORS, ENCRYPTED VAULT & STREAMING ]
+crates/veil-core/ @glastor-core @glastor-dev
+crates/veil-core/src/detector.rs @glastor-core @glastor-dev
+crates/veil-core/src/strategy.rs @glastor-core @glastor-dev
+crates/veil-core/src/vault.rs @glastor-core @glastor-dev
+crates/veil-core/src/stream.rs @glastor-core @glastor-dev
+crates/veil-core/src/policy.rs @glastor-core @glastor-dev
+crates/veil-core/src/lib.rs @glastor-core @glastor-dev
+
+# [ CLI, MCP SERVER & HTTP/SSE PROXY ]
+crates/veil-cli/ @glastor-core @glastor-dev
+crates/veil-cli/src/main.rs @glastor-core @glastor-dev
+crates/veil-cli/src/mcp.rs @glastor-core @glastor-dev
+crates/veil-cli/src/proxy.rs @glastor-core @glastor-dev
+
+# [ MULTI-MARKET BINDINGS (C-ABI FFI, PYTHON, NODE.JS, WASM & GO SDK) ]
+crates/veil-ffi/ @glastor-core @glastor-dev
+crates/veil-py/ @glastor-core @glastor-dev
+crates/veil-node/ @glastor-core @glastor-dev
+crates/veil-wasm/ @glastor-core @glastor-dev
+sdks/go/ @glastor-core @glastor-dev
+examples/ @glastor-core @glastor-dev
+
+# [ GOVERNANCE, BRAND ASSETS & COMPLIANCE ]
+assets/ @glastor-core @glastor-dev
+public/favicon/ @glastor-core @glastor-dev
+README.md @glastor-core @glastor-dev
+CHANGELOG.md @glastor-core @glastor-dev
+CONTRIBUTORS.md @glastor-core @glastor-dev
+CITATION.cff @glastor-core @glastor-dev
+LICENSE-MIT @glastor-core @glastor-dev
+LICENSE-APACHE @glastor-core @glastor-dev

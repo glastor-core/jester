@@ -1,0 +1,51 @@
+name: "✨ Solicitud de Funcionalidad"
+description: "Propón un nuevo detector regional, conector de streaming o mejora para GLASTOR® pii-veil"
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ¡Gracias por tu iniciativa para hacer de **GLASTOR® pii-veil** un motor DLP y de anonimización reversible aún más rápido, completo y ergonómico!
+        Priorizamos propuestas con algoritmos de validación matemática (dígitos verificadores para cero falsos positivos), streaming en memoria constante $O(1)$ e integraciones para agentes de IA y bases de datos.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: "Área o Módulo Principal"
+      description: "Selecciona el área técnica donde encaja esta propuesta."
+      options:
+        - "Nuevo Detector de Identidad Regional / Financiero (con checksum)"
+        - "Nuevo Detector de Secretos Cloud / API Keys"
+        - "Formatos de Streaming de Datos (SQL, CSV, Parquet, Logs)"
+        - "Servidor MCP (veil mcp) y Herramientas para Agentes"
+        - "Proxy HTTP/SSE (veil proxy) para Proveedores LLM"
+        - "Persistencia y Cifrado de Vault (Redis, Postgres, KMS)"
+        - "SDKs y Bindings (Rust, Python, Node.js, Go, C-ABI)"
+        - "Otro"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Problema o Necesidad"
+      description: "¿Qué caso de uso o requisito de cumplimiento (GDPR, HIPAA, PCI-DSS, SOC2) busca resolver esta propuesta?"
+      placeholder: "Al anonimizar dumps SQL o prompts con documentos de identidad de Brasil (CPF/CNPJ)..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Propuesta de Solución"
+      description: "¿Cómo debería funcionar en pii-veil? Incluye el formato o algoritmo de dígito verificador sugerido."
+      placeholder: "Proponemos añadir el validador Módulo-11 para CPF brasileño junto con su generador sintético determinista..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "Contexto Adicional / Especificaciones"
+      description: "Enlaces a estándares oficiales (ISO, RFC), normativas o benchmarks preliminares."
