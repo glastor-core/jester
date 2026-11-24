@@ -152,6 +152,7 @@ code, pre, kbd {
 .brand {
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 10px;
   font-family: var(--font-display);
   font-weight: 800;
@@ -1204,7 +1205,54 @@ td:first-child {
 }
 
 /* Responsive */
+@media (max-width: 1120px) {
+  .nav-links {
+    gap: 4px;
+  }
+  .nav-links a {
+    font-size: 0.86rem;
+    padding: 7px 10px;
+  }
+  .nav-github span {
+    display: none;
+  }
+  .nav-github {
+    padding: 7px 9px !important;
+  }
+}
+
 @media (max-width: 960px) {
+  .mobile-menu-btn {
+    display: inline-flex;
+  }
+  .nav-links {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 16px 24px 20px;
+    background: rgba(9, 13, 20, 0.98);
+    border-bottom: 1px solid var(--border-strong);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.65);
+  }
+  .nav-links.open {
+    display: flex;
+  }
+  .nav-links a {
+    font-size: 0.95rem;
+    padding: 11px 14px;
+  }
+  .nav-github span {
+    display: inline;
+  }
+  .nav-github,
+  .nav-cta {
+    justify-content: center;
+  }
   .kpi-bar {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1236,24 +1284,6 @@ td:first-child {
 }
 
 @media (max-width: 680px) {
-  .mobile-menu-btn {
-    display: inline-flex;
-  }
-  .nav-links {
-    display: none;
-    position: absolute;
-    top: 68px;
-    left: 0;
-    right: 0;
-    flex-direction: column;
-    align-items: stretch;
-    padding: 14px 20px 18px;
-    background: rgba(9, 13, 20, 0.98);
-    border-bottom: 1px solid var(--border);
-  }
-  .nav-links.open {
-    display: flex;
-  }
   .kpi-bar {
     grid-template-columns: 1fr;
   }
