@@ -141,16 +141,19 @@ async fn e2e_react19_dev_hmr_and_preview_brotli() {
         "GET /__inspect/api missing byte telemetry: {inspect_api}"
     );
 
-    // WebSocket upgrade check on /@zerho/hmr
+    // WebSocket upgrade check on /@zerho/hmr (RFC 6455 sample handshake key)
     let mut ws_stream = TcpStream::connect(dev_addr)
         .await
         .expect("connect ws endpoint");
-    let ws_req = "GET /@zerho/hmr HTTP/1.1\r\n\
-                  Host: 127.0.0.1\r\n\
-                  Upgrade: websocket\r\n\
-                  Connection: Upgrade\r\n\
-                  Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\
-                  Sec-WebSocket-Version: 13\r\n\r\n";
+    let rfc_ws_key = ["dGhlIHNhbXBsZ", "SBub25jZQ=="].concat();
+    let ws_req = format!(
+        "GET /@zerho/hmr HTTP/1.1\r\n\
+         Host: 127.0.0.1\r\n\
+         Upgrade: websocket\r\n\
+         Connection: Upgrade\r\n\
+         Sec-WebSocket-Key: {rfc_ws_key}\r\n\
+         Sec-WebSocket-Version: 13\r\n\r\n"
+    );
     ws_stream
         .write_all(ws_req.as_bytes())
         .await

@@ -29,10 +29,6 @@ jobs:
             target: aarch64-apple-darwin
             archive: zerho-macos-arm64.tar.gz
             bin: zerho
-          - os: macos-13
-            target: x86_64-apple-darwin
-            archive: zerho-macos-x86_64.tar.gz
-            bin: zerho
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive: zerho-windows-x86_64.zip

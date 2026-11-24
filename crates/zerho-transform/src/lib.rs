@@ -1052,7 +1052,7 @@ mod tests {
 
         let (min, map) = finalize_js_bundle_with_map(&esm, "assets/index.js", true, true)
             .expect("sourcemap generation should succeed");
-        assert!(!min.is_empty());
+        assert!(min.contains("zerho-cjs"));
         let map_json = map.expect("source map should be present");
         assert!(map_json.contains("\"version\":3"));
     }

@@ -11,6 +11,12 @@ members = [
     "crates/zerho-bundler",
     "crates/zerho-cli",
 ]
+exclude = [
+    "examples/wasm-plugin",
+    "examples/plugins/vue-sfc",
+    "examples/plugins/svelte",
+    "examples/plugins/solid",
+]
 
 [workspace.package]
 version = "1.0.0"
@@ -77,3 +83,8 @@ module_name_repetitions = "allow"
 must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
+
+[profile.release]
+lto = "thin"
+strip = "symbols"
+codegen-units = 1
