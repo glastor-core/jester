@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Native React Fast Refresh:** Enabled `oxc::transformer::ReactRefreshOptions` for React `.tsx`/`.jsx` in dev mode (`$RefreshReg$` / `$RefreshSig$`) with automatic HMR boundary wrapping in `zerho-server`.
 - **Library Mode (`[build.lib]`) & `zerho build --watch`:** Emit reusable `.mjs` (ESM) and `.cjs` (CommonJS) bundles with Brotli/Gzip/SRI, plus incremental file-watching rebuilds powered by `notify` and `redb`.
 - **Pure-Rust Image Optimization (`[assets].optimize_images`):** Automatic PNG/JPEG → WebP conversion via `image` crate (zero `sharp`, zero C bindings) when WebP produces a smaller output.
-- **Verified `--release` Benchmarks (v0.7.0, 16.57 MB binary):** `0.002 ms` (2 µs) warm `redb` cache hits, `0.63 ms` cold TSX transform, `17.06 ms` min full production build (`basic-ts` with Scope Hoisting + `oxc_minifier` + Brotli + SRI).
+- **Verified `--release` Benchmarks (v0.7.0, 16.60 MB binary, AMD Zen 3 / 16 threads / Windows 11 / `rustc 1.96.1`):** `0.0017 ms` (1.7 µs) warm `redb` cache hits, `0.548 ms` cold TSX transform, `19.32 ms` warm / `43.04 ms` cold build (`basic-ts`, 3 mods), and `763.53 ms` warm / `1,254 ms` cold on a 500-module synthetic TypeScript graph (`benchmarks/results.json`).
 
 ## [0.6.0] - 2026-11-23
 

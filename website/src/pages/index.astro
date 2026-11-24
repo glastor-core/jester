@@ -66,14 +66,14 @@ const crates = [
 
 <BaseLayout
   title="zerho — Zero-Node, 100% Rust Frontend Dev Server & Bundler"
-  description="Single 16.57 MB native Rust binary replacing Node.js in your frontend toolchain. 0.002 ms redb cache hits, Scope Hoisting, oxc_minifier, React Fast Refresh, Brotli, and Library Mode."
+  description="Single 16.60 MB native Rust binary replacing Node.js in your frontend toolchain. 0.0017 ms redb cache hits, Scope Hoisting, oxc_minifier, React Fast Refresh, Brotli, and Library Mode."
 >
   <!-- Hero -->
   <section class="hero">
     <div class="container">
       <div class="eyebrow">
         <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
-        <span>v0.7.0 · 0.002 ms redb Cache · Scope Hoisting · React Fast Refresh · Zero Node.js</span>
+        <span>v0.7.0 · 0.0017 ms redb Cache · Scope Hoisting · React Fast Refresh · Zero Node.js</span>
       </div>
 
       <h1>
@@ -143,27 +143,27 @@ const crates = [
         </span>
       </div>
 
-      <!-- KPI Benchmark Strip -->
+      <!-- KPI Benchmark Strip (synced 1:1 with benchmarks/results.json) -->
       <div class="kpi-grid" aria-label="Key release benchmark metrics">
         <div class="kpi-card">
-          <div class="kpi-value">16.57 <span>MB</span></div>
+          <div class="kpi-value">16.60 <span>MB</span></div>
           <div class="kpi-label">Single Native Binary</div>
-          <div class="kpi-sub">Zero Node.js · unsafe_code = "forbid"</div>
+          <div class="kpi-sub">Zero Node.js · 100% Safe Rust</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-value">0.002 <span>ms</span></div>
+          <div class="kpi-value">0.0017 <span>ms</span></div>
           <div class="kpi-label">Warm redb Cache Hit</div>
-          <div class="kpi-sub">2 µs ACID B-tree lookup · --release</div>
+          <div class="kpi-sub">1.7 µs ACID B-tree lookup · basic-ts</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-value">0.63 <span>ms</span></div>
+          <div class="kpi-value">0.548 <span>ms</span></div>
           <div class="kpi-label">Cold Oxc TSX Transform</div>
-          <div class="kpi-sub">0.73 ms on TypeScript entry</div>
+          <div class="kpi-sub">0.553 ms on TypeScript entry</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-value">17.06 <span>ms</span></div>
-          <div class="kpi-label">Full v0.7 Production Build</div>
-          <div class="kpi-sub">Scope Hoisting + Minifier + Brotli + SRI</div>
+          <div class="kpi-value">19.32 <span>ms</span></div>
+          <div class="kpi-label">Warm Build (basic-ts · 3 mods)</div>
+          <div class="kpi-sub">43.04 ms cold · 763 ms on 500 mods</div>
         </div>
       </div>
     </div>

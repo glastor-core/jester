@@ -2,7 +2,7 @@
 
 **Zero-Node, 100% Rust frontend dev server and production bundler.**
 
-`zerho` ships as a single **16.57 MB** native Rust binary (`unsafe_code = "forbid"`) with declarative `zerho.toml` configuration, first-class support for React/Preact/Solid + TypeScript + CSS, embedded ACID `redb` + HTTP remote team caching, Scope Hoisting + `oxc_minifier`, React Fast Refresh, Brotli `.br`, Library Mode, pure-Rust SVG/WebP optimization, `zerho check`, and a WebAssembly Component Model (`zerho:plugin@0.1.0`) plugin contract.
+`zerho` ships as a single **16.60 MB** native Rust binary (`unsafe_code = "forbid"`) with declarative `zerho.toml` configuration, first-class support for React/Preact/Solid + TypeScript + CSS, embedded ACID `redb` + HTTP remote team caching, Scope Hoisting + `oxc_minifier`, React Fast Refresh, Brotli `.br`, Library Mode, pure-Rust SVG/WebP optimization, `zerho check`, and a WebAssembly Component Model (`zerho:plugin@0.1.0`) plugin contract.
 
 ## Real `--release` Benchmarks (v0.7.0)
 
