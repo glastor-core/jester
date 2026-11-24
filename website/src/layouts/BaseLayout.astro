@@ -40,7 +40,8 @@ const jsonLd = {
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalURL.toString()} />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg" />
+    <link rel="manifest" href="/favicon/site.webmanifest" />
     <meta name="theme-color" content="#090d14" />
 
     <!-- OpenGraph / Twitter -->
@@ -48,9 +49,11 @@ const jsonLd = {
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalURL.toString()} />
+    <meta property="og:image" content={new URL('/images/og-preview.svg', canonicalURL).toString()} />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={new URL('/images/og-preview.svg', canonicalURL).toString()} />
 
     <!-- Google Fonts: Red Hat Family + Material Symbols Outlined -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#090d14"/>
+  <rect x="36" y="36" width="1128" height="558" rx="28" fill="#0f172a" stroke="#f97316" stroke-opacity="0.28" stroke-width="2"/>
+  <rect x="96" y="110" width="88" height="88" rx="20" fill="#090d14" stroke="#f97316" stroke-opacity="0.55" stroke-width="2.5"/>
+  <path d="M146.5 123L118 158H138L134 185L162 150H142L146.5 123Z" fill="#f97316"/>
+  <text x="208" y="172" fill="#ffffff" font-family="'Red Hat Display', system-ui, sans-serif" font-size="68" font-weight="800" letter-spacing="-0.03em">zerho</text>
+  <text x="96" y="278" fill="#f8fafc" font-family="'Red Hat Display', system-ui, sans-serif" font-size="48" font-weight="700">Zero-Node, 100% Safe Rust</text>
+  <text x="96" y="340" fill="#94a3b8" font-family="'Red Hat Text', system-ui, sans-serif" font-size="32" font-weight="500">Frontend Dev Server &amp; Production Bundler</text>
+  <rect x="96" y="420" width="320" height="54" rx="12" fill="#1e293b" stroke="#334155"/>
+  <text x="122" y="455" fill="#f97316" font-family="'Red Hat Mono', monospace" font-size="22" font-weight="600">cargo install zerho</text>
+  <text x="96" y="544" fill="#64748b" font-family="'Red Hat Mono', monospace" font-size="22">zerho.xyz · glastor.es</text>
+</svg>

@@ -1,0 +1,17 @@
+{
+  "name": "zerho",
+  "short_name": "zerho",
+  "description": "Zero-Node, 100% Rust frontend dev server and production bundler.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090d14",
+  "theme_color": "#090d14",
+  "icons": [
+    {
+      "src": "/favicon/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
