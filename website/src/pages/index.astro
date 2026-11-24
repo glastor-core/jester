@@ -60,7 +60,7 @@ const crates = [
   { name: 'zerho-transform', desc: 'Oxc TS/JSX compiler, Minifier/Mangler, Scope Hoisting, Barrel Optimizer, SVG optimizer, and lightningcss pipeline.' },
   { name: 'zerho-server', desc: 'Zero-Node axum + tokio + notify dev server, WebSocket HMR, /@zerho/bundle, /__inspect UI, and Brotli PreviewServer.' },
   { name: 'zerho-bundler', desc: 'Rayon parallel bundler with incremental redb cache, Shared Chunks + modulepreload, Brotli .br, SRI/CSP, zerho check, and stats.html.' },
-  { name: 'zerho-cli', desc: 'Single native CLI binary: dev, build (--analyze), check (--strict), preview, bench, init, schema, and wit.' },
+  { name: 'zerho-cli', desc: 'Single native CLI binary: dev, build (--analyze, --watch, --ssr), migrate, check (--strict), preview, bench, init, schema, and wit.' },
 ];
 ---
 
@@ -319,39 +319,44 @@ const crates = [
           <thead>
             <tr>
               <th>Dimension</th>
-              <th class="col-zerho">zerho v0.1.0</th>
+              <th class="col-zerho">zerho v0.9.0</th>
               <th>Vite 8 (Rolldown + Node.js)</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td>Runtime Requirement</td>
-              <td class="col-zerho">Zero-Node (single 12.65 MB native binary)</td>
+              <td class="col-zerho">Zero-Node (single 16.60 MB native binary)</td>
               <td>Node.js + npm/pnpm runtime required</td>
             </tr>
             <tr>
-              <td>Configuration</td>
-              <td class="col-zerho">Declarative <span class="inline-code">zerho.toml</span> + JSON Schema</td>
+              <td>Configuration &amp; Migration</td>
+              <td class="col-zerho">Declarative <span class="inline-code">zerho.toml</span> + JSON Schema + <span class="inline-code">zerho migrate</span></td>
               <td>Executable <span class="inline-code">vite.config.ts</span> evaluated in Node</td>
             </tr>
             <tr>
               <td>JS / TS / JSX &amp; CSS Engine</td>
-              <td class="col-zerho">100% in-process <span class="inline-code">oxc</span> + <span class="inline-code">lightningcss</span></td>
+              <td class="col-zerho">100% in-process <span class="inline-code">oxc</span> (Fast Refresh, Minifier, Scope Hoisting) + <span class="inline-code">lightningcss</span> + WebP/SVG</td>
               <td>N-API bridge between JS host &amp; Rust crates</td>
             </tr>
             <tr>
               <td>Persistent Transform Cache</td>
-              <td class="col-zerho">Native <span class="inline-code">blake3</span> disk cache (0.232 ms hits)</td>
+              <td class="col-zerho">ACID <span class="inline-code">redb</span> B-tree + <span class="inline-code">blake3</span> + HTTP Remote Team Cache (0.0017 ms warm hits)</td>
               <td>JS filesystem &amp; dep pre-bundle cache</td>
             </tr>
             <tr>
+              <td>Web Platform &amp; Edge SSR</td>
+              <td class="col-zerho">Web Workers, <span class="inline-code">.wasm</span> streaming, MPA, Library Mode &amp; <span class="inline-code">--ssr</span> Edge bundles</td>
+              <td>Requires extra SSR/worker/library plugins &amp; Node config</td>
+            </tr>
+            <tr>
               <td>Plugin Isolation</td>
-              <td class="col-zerho">Fuel-metered <span class="inline-code">wasmtime</span> WASM (<span class="inline-code">zerho:plugin@0.1.0</span>)</td>
+              <td class="col-zerho">Fuel-metered <span class="inline-code">wasmtime</span> WASM (<span class="inline-code">zerho:plugin@0.1.0</span>) + UTF-8 string hooks</td>
               <td>Full-privilege Node.js JS plugins</td>
             </tr>
             <tr>
               <td>DevTools &amp; Memory Safety</td>
-              <td class="col-zerho">Built-in <span class="inline-code">/__inspect</span> UI · <span class="inline-code">unsafe_code = "forbid"</span></td>
+              <td class="col-zerho">Built-in <span class="inline-code">/__inspect</span> + Live Treemap, <span class="inline-code">dist/stats.html</span> &amp; <span class="inline-code">unsafe_code = "forbid"</span></td>
               <td>External plugin (<span class="inline-code">vite-plugin-inspect</span>)</td>
             </tr>
           </tbody>
@@ -368,7 +373,7 @@ const crates = [
           <span class="material-symbols-outlined" aria-hidden="true">hub</span>
           <span>Modular Rust Workspace</span>
         </span>
-        <h2>9 focused crates. 30/30 passing tests. Pedantic clean.</h2>
+        <h2>9 focused crates. 60/60 passing tests. Pedantic clean.</h2>
         <p>
           Every layer is cleanly decoupled in a Rust Edition 2024 workspace enforced with
           <span class="inline-code">clippy::pedantic -D warnings</span> and
