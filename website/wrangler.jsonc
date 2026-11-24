@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "zerho-site",
+  "compatibility_date": "2026-11-24",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page"
+  },
+  "routes": [
+    {
+      "pattern": "zerho.xyz",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.zerho.xyz",
+      "custom_domain": true
+    }
+  ]
+}
