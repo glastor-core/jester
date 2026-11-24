@@ -11,8 +11,8 @@ const features = [
   },
   {
     icon: 'layers',
-    title: 'LightningCSS, CSS Modules & SVG Optimizer',
-    desc: 'Built-in CSS nesting, vendor prefixing, *.module.css scoped class maps, and pure-Rust SVG optimization with zero PostCSS or Node plugins.',
+    title: 'LightningCSS, SVG & WebP Image Optimizer',
+    desc: 'Built-in CSS nesting, *.module.css scoped class maps, pure-Rust SVG minification, and automatic PNG/JPG to WebP conversion without sharp or Node.',
   },
   {
     icon: 'hub',
@@ -21,8 +21,8 @@ const features = [
   },
   {
     icon: 'speed',
-    title: 'Zero-Waterfall Dev & Granular HMR',
-    desc: 'In-memory Dev Partial Bundling (/@zerho/bundle), state-preserving import.meta.hot, and an isolated Shadow DOM <zerho-error-overlay>.',
+    title: 'React Fast Refresh & Zero-Waterfall Dev',
+    desc: 'Native oxc React Fast Refresh ($RefreshReg$), in-memory Dev Partial Bundling (/@zerho/bundle), granular HMR, and Shadow DOM Error Overlay.',
   },
   {
     icon: 'database',
@@ -66,14 +66,14 @@ const crates = [
 
 <BaseLayout
   title="zerho — Zero-Node, 100% Rust Frontend Dev Server & Bundler"
-  description="Single 12.65 MB native Rust binary replacing Node.js in your frontend toolchain. Sub-millisecond Oxc transforms, LightningCSS, granular HMR, and 9.56 ms production builds."
+  description="Single 16.57 MB native Rust binary replacing Node.js in your frontend toolchain. 0.002 ms redb cache hits, Scope Hoisting, oxc_minifier, React Fast Refresh, Brotli, and Library Mode."
 >
   <!-- Hero -->
   <section class="hero">
     <div class="container">
       <div class="eyebrow">
         <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
-        <span>v0.6.0 · Scope Hoisting · redb + Remote Cache · Zero Node.js Runtime</span>
+        <span>v0.7.0 · 0.002 ms redb Cache · Scope Hoisting · React Fast Refresh · Zero Node.js</span>
       </div>
 
       <h1>
@@ -146,24 +146,24 @@ const crates = [
       <!-- KPI Benchmark Strip -->
       <div class="kpi-grid" aria-label="Key release benchmark metrics">
         <div class="kpi-card">
-          <div class="kpi-value">12.65 <span>MB</span></div>
+          <div class="kpi-value">16.57 <span>MB</span></div>
           <div class="kpi-label">Single Native Binary</div>
           <div class="kpi-sub">Zero Node.js · unsafe_code = "forbid"</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-value">0.232 <span>ms</span></div>
-          <div class="kpi-label">Warm blake3 Cache Hit</div>
-          <div class="kpi-sub">basic-ts · 50-iter --release bench</div>
+          <div class="kpi-value">0.002 <span>ms</span></div>
+          <div class="kpi-label">Warm redb Cache Hit</div>
+          <div class="kpi-sub">2 µs ACID B-tree lookup · --release</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-value">0.39 <span>ms</span></div>
-          <div class="kpi-label">Cold Oxc TS Transform</div>
-          <div class="kpi-sub">0.52 ms on React TSX + JSX</div>
+          <div class="kpi-value">0.63 <span>ms</span></div>
+          <div class="kpi-label">Cold Oxc TSX Transform</div>
+          <div class="kpi-sub">0.73 ms on TypeScript entry</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-value">9.56 <span>ms</span></div>
-          <div class="kpi-label">Min Production Build</div>
-          <div class="kpi-sub">10.49 ms avg · minified + hashed</div>
+          <div class="kpi-value">17.06 <span>ms</span></div>
+          <div class="kpi-label">Full v0.7 Production Build</div>
+          <div class="kpi-sub">Scope Hoisting + Minifier + Brotli + SRI</div>
         </div>
       </div>
     </div>
@@ -208,8 +208,9 @@ const crates = [
         </span>
         <h2>Measured on real builds, not synthetic micro-loops.</h2>
         <p>
-          Reproducible via <span class="inline-code">zerho bench --iterations 50</span> on Windows
-          using the compiled <span class="inline-code">--release</span> binary (12.65 MB).
+          Reproducible via <span class="inline-code">zerho bench --iterations 20</span> on Windows
+          using the compiled v0.7.0 <span class="inline-code">--release</span> binary (16.57 MB) with
+          Scope Hoisting, <span class="inline-code">oxc_minifier</span>, Brotli <span class="inline-code">.br</span>, and SHA-384 SRI enabled.
         </p>
       </div>
 
@@ -217,21 +218,21 @@ const crates = [
         <div class="bench-card">
           <div class="bench-head">
             <h3>basic-ts</h3>
-            <span class="bench-badge">50 iterations · --release</span>
+            <span class="bench-badge">20 iterations · v0.7.0 --release</span>
           </div>
-          <p>TypeScript entry + CSS bundling, AST import rewriting, minification, and manifest emission.</p>
+          <p>TypeScript entry + CSS bundling, Scope Hoisting, oxc_minifier, Brotli .br, SHA-384 SRI, and CSP manifest.</p>
           <div class="bench-metrics">
             <div class="bench-metric">
-              <strong>0.39 ms</strong>
+              <strong>0.73 ms</strong>
               <span>Cold Oxc Transform</span>
             </div>
             <div class="bench-metric">
-              <strong>0.232 ms</strong>
-              <span>Warm blake3 Cache</span>
+              <strong>0.002 ms</strong>
+              <span>Warm redb Cache (2 µs)</span>
             </div>
             <div class="bench-metric">
-              <strong>9.56 ms</strong>
-              <span>Min Build (10.49 ms avg)</span>
+              <strong>17.06 ms</strong>
+              <span>Min Build (19.96 ms avg)</span>
             </div>
           </div>
         </div>
@@ -239,21 +240,21 @@ const crates = [
         <div class="bench-card">
           <div class="bench-head">
             <h3>react-tsx-demo</h3>
-            <span class="bench-badge">50 iterations · --release</span>
+            <span class="bench-badge">20 iterations · v0.7.0 --release</span>
           </div>
-          <p>5 modules + CJS-to-ESM pre-bundling + dynamic import() splitting + 2 Source Maps v3 + tree-shaking.</p>
+          <p>5 modules + CJS-to-ESM + dynamic import() splitting + 2 Source Maps v3 + Scope Hoisting + Brotli .br.</p>
           <div class="bench-metrics">
             <div class="bench-metric">
-              <strong>0.52 ms</strong>
+              <strong>0.63 ms</strong>
               <span>Cold TSX Transform</span>
             </div>
             <div class="bench-metric">
-              <strong>0.462 ms</strong>
-              <span>Warm blake3 Cache</span>
+              <strong>0.002 ms</strong>
+              <span>Warm redb Cache (2 µs)</span>
             </div>
             <div class="bench-metric">
-              <strong>17.80 ms</strong>
-              <span>Min Build (20.39 ms avg)</span>
+              <strong>29.76 ms</strong>
+              <span>Min Build (35.16 ms avg)</span>
             </div>
           </div>
         </div>

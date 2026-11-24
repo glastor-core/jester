@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 brotli.workspace = true
 flate2.workspace = true
+image.workspace = true
 rayon.workspace = true
 sha2.workspace = true
 zerho-config.workspace = true

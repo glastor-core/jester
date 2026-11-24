@@ -1007,11 +1007,26 @@ async fn forward_http_proxy(target_base: &str, req_path: &str, request: Request)
 
 fn inject_hmr_preamble(web_path: &str, code: &str) -> String {
     let escaped = escape_json(web_path);
-    format!(
-        "import {{ createHotContext as __zerho_createHotContext }} from \"/@zerho/client\";\n\
-         import.meta.hot = __zerho_createHotContext(\"{escaped}\");\n\
-         {code}"
-    )
+    if code.contains("$RefreshReg$") || code.contains("$RefreshSig$") {
+        format!(
+            "import {{ createHotContext as __zerho_createHotContext }} from \"/@zerho/client\";\n\
+             import.meta.hot = __zerho_createHotContext(\"{escaped}\");\n\
+             const __zerho_prevReg = window.$RefreshReg$;\n\
+             const __zerho_prevSig = window.$RefreshSig$;\n\
+             window.$RefreshReg$ = (type, id) => {{ if (window.__ZERHO_REFRESH_RUNTIME__) window.__ZERHO_REFRESH_RUNTIME__.register(type, \"{escaped} \" + id); }};\n\
+             window.$RefreshSig$ = () => (type) => type;\n\
+             {code}\n\
+             window.$RefreshReg$ = __zerho_prevReg;\n\
+             window.$RefreshSig$ = __zerho_prevSig;\n\
+             if (import.meta.hot) {{ import.meta.hot.accept(); }}\n"
+        )
+    } else {
+        format!(
+            "import {{ createHotContext as __zerho_createHotContext }} from \"/@zerho/client\";\n\
+             import.meta.hot = __zerho_createHotContext(\"{escaped}\");\n\
+             {code}"
+        )
+    }
 }
 
 fn render_error_overlay_module(file: &str, message: &str) -> String {

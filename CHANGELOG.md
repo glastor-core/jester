@@ -5,6 +5,14 @@ All notable changes to **zerho** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-11-23
+
+### Added
+- **Native React Fast Refresh:** Enabled `oxc::transformer::ReactRefreshOptions` for React `.tsx`/`.jsx` in dev mode (`$RefreshReg$` / `$RefreshSig$`) with automatic HMR boundary wrapping in `zerho-server`.
+- **Library Mode (`[build.lib]`) & `zerho build --watch`:** Emit reusable `.mjs` (ESM) and `.cjs` (CommonJS) bundles with Brotli/Gzip/SRI, plus incremental file-watching rebuilds powered by `notify` and `redb`.
+- **Pure-Rust Image Optimization (`[assets].optimize_images`):** Automatic PNG/JPEG → WebP conversion via `image` crate (zero `sharp`, zero C bindings) when WebP produces a smaller output.
+- **Verified `--release` Benchmarks (v0.7.0, 16.57 MB binary):** `0.002 ms` (2 µs) warm `redb` cache hits, `0.63 ms` cold TSX transform, `17.06 ms` min full production build (`basic-ts` with Scope Hoisting + `oxc_minifier` + Brotli + SRI).
+
 ## [0.6.0] - 2026-11-23
 
 ### Added

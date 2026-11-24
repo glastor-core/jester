@@ -13,7 +13,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -60,6 +60,7 @@ wasmtime = { version = "29", default-features = false, features = [
 sha2 = "0.10"
 flate2 = "1"
 brotli = { version = "8", default-features = false, features = ["std"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 rayon = "1"
 redb = "2"
 

@@ -66,7 +66,13 @@ csp = true                   # emit strict dist/csp.json
 secret_scan = true           # fail build on leaked API keys / private keys
 
 [assets]
-optimize_svg = true          # pure-Rust SVG minification`;
+optimize_svg = true          # pure-Rust SVG minification
+optimize_images = true       # pure-Rust PNG/JPG -> WebP conversion
+
+[build.lib]
+# entry = "src/index.ts"     # enables Library Mode (.mjs + .cjs)
+# name = "my-lib"
+# formats = ["es", "cjs"]`;
 
 const hmrSnippet = `// Granular state-preserving HMR in any module
 let count = import.meta.hot?.data.count ?? 0;
@@ -159,8 +165,8 @@ const cliCommands = [
 ---
 
 <BaseLayout
-  title="Documentation — zerho v0.6.0"
-  description="Complete documentation for zerho v0.6.0: Quick Start, zerho.toml configuration reference, CLI commands (dev, build, check, preview, bench), granular HMR, CSS Modules, .env & proxy, and the zerho:plugin@0.1.0 WASM WIT contract."
+  title="Documentation — zerho v0.7.0"
+  description="Complete documentation for zerho v0.7.0: Quick Start, zerho.toml configuration reference, CLI commands (dev, build --analyze --watch, check, preview, bench), React Fast Refresh, Library Mode, WebP optimization, and WASM WIT plugins."
 >
   <div class="container docs-layout">
     <aside class="docs-sidebar" aria-label="Documentation sections">
@@ -180,7 +186,7 @@ const cliCommands = [
       <section id="quick-start">
         <div class="eyebrow" style="margin-bottom: 14px;">
           <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
-          <span>Documentation · v0.6.0</span>
+          <span>Documentation · v0.7.0</span>
         </div>
         <h1>zerho Documentation</h1>
         <p>

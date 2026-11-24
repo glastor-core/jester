@@ -15,7 +15,9 @@ use oxc::minifier::{CompressOptions, MangleOptions, Minifier, MinifierOptions};
 use oxc::parser::Parser;
 use oxc::semantic::SemanticBuilder;
 use oxc::span::{SourceType, Span};
-use oxc::transformer::{JsxOptions, JsxRuntime, TransformOptions, Transformer};
+use oxc::transformer::{
+    JsxOptions, JsxRuntime, ReactRefreshOptions, TransformOptions, Transformer,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use zerho_core::{ContentHash, Framework, ModuleKind, ZerhoError, ZerhoResult};
@@ -123,11 +125,17 @@ fn transform_script(
     let semantic = SemanticBuilder::new().build(&program);
     let scoping = semantic.semantic.into_scoping();
 
+    let is_jsx_file = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("tsx") || ext.eq_ignore_ascii_case("jsx"));
+
     let options = TransformOptions {
         jsx: match framework {
             Framework::React => JsxOptions {
                 runtime: JsxRuntime::Automatic,
                 development: is_dev,
+                refresh: (is_dev && is_jsx_file).then(ReactRefreshOptions::default),
                 ..JsxOptions::default()
             },
             Framework::Preact => JsxOptions {
@@ -1092,5 +1100,38 @@ export const DEAD_CONST = "DEAD_CONST_MARKER";
         let hmr =
             wrap_css_with_exports_as_hmr_module("/src/card.module.css", &out.code, Some(&exports));
         assert!(hmr.contains(&format!("\"card\":\"{scoped_card}\"")));
+    }
+
+    #[test]
+    fn emits_react_fast_refresh_registrations_in_dev_mode() {
+        let pipeline = TransformPipeline::default();
+        let src = "export function Counter() { return <button>Hi</button>; }\n";
+
+        let dev_out = pipeline
+            .transform(&TransformInput {
+                path: PathBuf::from("src/Counter.tsx"),
+                kind: ModuleKind::Tsx,
+                source: src.to_owned(),
+                framework: Framework::React,
+                is_dev: true,
+                minify_css: false,
+            })
+            .expect("dev react transform");
+        assert!(
+            dev_out.code.contains("$RefreshReg$"),
+            "dev React TSX should emit Fast Refresh $RefreshReg$ registration"
+        );
+
+        let prod_out = pipeline
+            .transform(&TransformInput {
+                path: PathBuf::from("src/Counter.tsx"),
+                kind: ModuleKind::Tsx,
+                source: src.to_owned(),
+                framework: Framework::React,
+                is_dev: false,
+                minify_css: false,
+            })
+            .expect("prod react transform");
+        assert!(!prod_out.code.contains("$RefreshReg$"));
     }
 }

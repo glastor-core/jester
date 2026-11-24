@@ -2,9 +2,11 @@ mod scaffold;
 
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
+use notify::{Event, EventKind, RecursiveMode, Watcher};
 use scaffold::{Template, scaffold_project};
 use zerho_bundler::{Bundler, run_project_check};
 use zerho_config::ZerhoConfig;
@@ -100,7 +102,16 @@ fn cmd_build(flags: &[String]) -> ZerhoResult<()> {
     if flags.iter().any(|f| f == "--analyze") {
         config.build.analyze = true;
     }
-    let mut bundler = Bundler::new(config);
+    let watch = flags.iter().any(|f| f == "--watch");
+    run_single_build(&config)?;
+    if watch {
+        run_build_watch(&config)?;
+    }
+    Ok(())
+}
+
+fn run_single_build(config: &ZerhoConfig) -> ZerhoResult<()> {
+    let mut bundler = Bundler::new(config.clone());
     let output = bundler.build()?;
     let mode_tag = if output.scope_hoisted {
         "scope-hoisted"
@@ -153,6 +164,57 @@ fn cmd_build(flags: &[String]) -> ZerhoResult<()> {
         println!("  bundle analyzer -> {}", stats_path.display());
     }
     Ok(())
+}
+
+fn run_build_watch(config: &ZerhoConfig) -> ZerhoResult<()> {
+    let root = config
+        .project
+        .root
+        .canonicalize()
+        .unwrap_or_else(|_| config.project.root.clone());
+    let (tx, rx) = mpsc::channel::<()>();
+    let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
+        let Ok(event) = res else { return };
+        if !matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
+            return;
+        }
+        if event.paths.iter().any(|p| !is_watch_ignored(p) && !p.is_dir()) {
+            let _ = tx.send(());
+        }
+    })
+    .map_err(|err| ZerhoError::Io {
+        path: Some(root.clone()),
+        reason: format!("failed to start build watcher: {err}"),
+    })?;
+
+    watcher
+        .watch(&root, RecursiveMode::Recursive)
+        .map_err(|err| ZerhoError::Io {
+            path: Some(root.clone()),
+            reason: format!("failed to watch `{}`: {err}", root.display()),
+        })?;
+
+    println!("zerho build --watch listening for changes in {} (Ctrl+C to stop)...", root.display());
+    while rx.recv().is_ok() {
+        // Coalesce rapid editor save bursts.
+        while rx.recv_timeout(Duration::from_millis(60)).is_ok() {}
+        let t0 = Instant::now();
+        match run_single_build(config) {
+            Ok(()) => println!("  rebuilt in {} ms", t0.elapsed().as_millis()),
+            Err(err) => eprintln!("  rebuild error: {err}"),
+        }
+    }
+    Ok(())
+}
+
+fn is_watch_ignored(path: &Path) -> bool {
+    path.components().any(|c| {
+        matches!(
+            c,
+            Component::Normal(name)
+                if name == ".git" || name == "target" || name == "dist" || name == ".zerho" || name == "node_modules"
+        )
+    })
 }
 
 fn cmd_check(flags: &[String]) -> ZerhoResult<()> {
@@ -356,6 +418,7 @@ fn print_help() {
            --config <PATH>       Path to zerho.toml (default: ./zerho.toml)\n\
            --port <PORT>         Override dev/preview server port\n\
            --analyze             Emit interactive dist/stats.html Bundle Analyzer on build\n\
+           --watch               Watch source files and rebuild incrementally on `zerho build`\n\
            --strict              Fail `zerho check` on warnings as well as errors\n\
            --iterations <N>      Number of iterations for `zerho bench` (default: 10)\n\
            -V, --version         Print version"

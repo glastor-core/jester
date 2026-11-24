@@ -10,6 +10,7 @@ name = "zerho"
 path = "src/main.rs"
 
 [dependencies]
+notify.workspace = true
 tokio.workspace = true
 zerho-bundler.workspace = true
 zerho-config.workspace = true

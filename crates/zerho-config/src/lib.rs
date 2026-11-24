@@ -40,11 +40,36 @@ impl Default for SecurityConfig {
 pub struct AssetsConfig {
     /// Automatically optimize imported and `public/` `.svg` files in pure Rust.
     pub optimize_svg: bool,
+    /// Automatically convert imported `.png`/`.jpg`/`.jpeg` assets to smaller `.webp` in pure Rust.
+    pub optimize_images: bool,
 }
 
 impl Default for AssetsConfig {
     fn default() -> Self {
-        Self { optimize_svg: true }
+        Self {
+            optimize_svg: true,
+            optimize_images: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibConfig {
+    /// Library entry point (enables Library Mode when set, emitting ESM `.mjs` and/or CJS `.cjs`).
+    pub entry: Option<PathBuf>,
+    /// Output base filename (defaults to `project.name`).
+    pub name: Option<String>,
+    /// Output formats: `"es"`, `"cjs"` (default: `["es", "cjs"]`).
+    pub formats: Vec<String>,
+}
+
+impl Default for LibConfig {
+    fn default() -> Self {
+        Self {
+            entry: None,
+            name: None,
+            formats: vec!["es".to_owned(), "cjs".to_owned()],
+        }
     }
 }
 
@@ -150,6 +175,7 @@ pub struct BuildConfig {
     pub scope_hoisting: bool,
     pub analyze: bool,
     pub budgets: BudgetsConfig,
+    pub lib: LibConfig,
 }
 
 impl Default for BuildConfig {
@@ -164,6 +190,7 @@ impl Default for BuildConfig {
             scope_hoisting: true,
             analyze: false,
             budgets: BudgetsConfig::default(),
+            lib: LibConfig::default(),
         }
     }
 }
@@ -292,6 +319,15 @@ impl ZerhoConfig {
                 ("build.budgets", "max_chunk_kb") => {
                     config.build.budgets.max_chunk_kb = Some(parse_u64(value, line_no)?);
                 }
+                ("build.lib", "entry") => {
+                    config.build.lib.entry = Some(PathBuf::from(parse_string(value, line_no)?));
+                }
+                ("build.lib", "name") => {
+                    config.build.lib.name = Some(parse_string(value, line_no)?);
+                }
+                ("build.lib", "formats") => {
+                    config.build.lib.formats = parse_string_list(value, line_no)?;
+                }
                 ("css", "modules") => config.css.modules = parse_bool(value, line_no)?,
                 ("css", "minify") => config.css.minify = parse_bool(value, line_no)?,
                 ("cache", "enabled") => config.cache.enabled = parse_bool(value, line_no)?,
@@ -311,6 +347,9 @@ impl ZerhoConfig {
                 }
                 ("assets", "optimize_svg") => {
                     config.assets.optimize_svg = parse_bool(value, line_no)?;
+                }
+                ("assets", "optimize_images") => {
+                    config.assets.optimize_images = parse_bool(value, line_no)?;
                 }
                 _ => {
                     return Err(ZerhoError::Config(format!(
@@ -569,6 +608,28 @@ fn parse_string(raw: &str, line_no: usize) -> ZerhoResult<String> {
             "line {line_no}: expected quoted string, got `{raw}`"
         )))
     }
+}
+
+fn parse_string_list(raw: &str, line_no: usize) -> ZerhoResult<Vec<String>> {
+    let trimmed = raw.trim();
+    if trimmed.starts_with('[') && trimmed.ends_with(']') {
+        let inner = &trimmed[1..trimmed.len() - 1];
+        let mut items = Vec::new();
+        for part in inner.split(',') {
+            let p = part.trim();
+            if !p.is_empty() {
+                items.push(parse_string(p, line_no)?);
+            }
+        }
+        return Ok(items);
+    }
+    let single = parse_string(trimmed, line_no)?;
+    Ok(single
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect())
 }
 
 fn parse_bool(raw: &str, line_no: usize) -> ZerhoResult<bool> {

@@ -1,4 +1,5 @@
 pub mod check;
+pub mod images;
 pub mod security;
 pub mod stats;
 
@@ -148,6 +149,10 @@ impl Bundler {
     #[allow(clippy::too_many_lines)]
     pub fn build(&mut self) -> ZerhoResult<BundleOutput> {
         self.config.validate()?;
+
+        if let Some(lib_entry) = self.config.build.lib.entry.clone() {
+            return self.build_library(&lib_entry);
+        }
 
         let entry_path = self.root.join(&self.config.project.entry);
         let entry_canon = entry_path.canonicalize().map_err(|err| ZerhoError::Io {
@@ -858,15 +863,24 @@ impl Bundler {
             path: Some(canonical.to_path_buf()),
             reason: err.to_string(),
         })?;
-        let ext = canonical
+        let mut ext = canonical
             .extension()
             .and_then(|e| e.to_str())
-            .unwrap_or("bin");
+            .unwrap_or("bin")
+            .to_owned();
         if self.config.assets.optimize_svg
             && ext.eq_ignore_ascii_case("svg")
             && let Ok(text) = std::str::from_utf8(&bytes)
         {
             bytes = optimize_svg(text).into_bytes();
+        } else if self.config.assets.optimize_images
+            && (ext.eq_ignore_ascii_case("png")
+                || ext.eq_ignore_ascii_case("jpg")
+                || ext.eq_ignore_ascii_case("jpeg"))
+            && let Some(webp) = images::optimize_image_to_webp(&bytes)
+        {
+            bytes = webp;
+            "webp".clone_into(&mut ext);
         }
         let hash = ContentHash::from_bytes(&bytes);
         let stem = canonical
@@ -901,6 +915,154 @@ impl Bundler {
             resolved_imports: BTreeMap::new(),
         };
         Ok((module, chunk))
+    }
+
+    fn build_library(&mut self, lib_entry: &Path) -> ZerhoResult<BundleOutput> {
+        let entry_path = self.root.join(lib_entry);
+        let entry_canon = entry_path.canonicalize().map_err(|err| ZerhoError::Io {
+            path: Some(entry_path),
+            reason: format!("library entry file not found: {err}"),
+        })?;
+
+        let out_dir = if self.config.build.out_dir.is_absolute() {
+            self.config.build.out_dir.clone()
+        } else {
+            self.root.join(&self.config.build.out_dir)
+        };
+        fs::create_dir_all(&out_dir).map_err(|err| ZerhoError::Io {
+            path: Some(out_dir.clone()),
+            reason: err.to_string(),
+        })?;
+        fs::create_dir_all(out_dir.join("assets")).map_err(|err| ZerhoError::Io {
+            path: Some(out_dir.join("assets")),
+            reason: err.to_string(),
+        })?;
+
+        let mut collected = Vec::new();
+        let mut dynamic_targets = Vec::new();
+        let mut usage_map = HashMap::new();
+        let mut asset_chunks = Vec::new();
+        usage_map.insert(entry_canon.clone(), ImportedSymbols::All);
+
+        let barrel_imports_bypassed = self.collect_module_graph(
+            &entry_canon,
+            &out_dir,
+            &mut collected,
+            &mut dynamic_targets,
+            &mut usage_map,
+            &mut asset_chunks,
+        )?;
+        let tree_shaken_exports = shake_modules(&mut collected, &usage_map)?;
+        self.lower_esm_modules(&mut collected)?;
+
+        let entry_id = self.module_key(&entry_canon);
+        let lib_name = self
+            .config
+            .build
+            .lib
+            .name
+            .clone()
+            .unwrap_or_else(|| self.config.project.name.clone());
+
+        let mut chunks = Vec::new();
+        for fmt in &self.config.build.lib.formats {
+            let (file_name, raw_code) = match fmt.as_str() {
+                "es" | "esm" => (
+                    format!("{lib_name}.mjs"),
+                    assemble_library_bundle(&collected, &entry_id, true),
+                ),
+                "cjs" => (
+                    format!("{lib_name}.cjs"),
+                    assemble_library_bundle(&collected, &entry_id, false),
+                ),
+                other => {
+                    return Err(ZerhoError::Config(format!(
+                        "unsupported `build.lib.formats` value `{other}` (expected: es, cjs)"
+                    )));
+                }
+            };
+            let chunk = self.emit_named_js_file(&out_dir, &file_name, &raw_code)?;
+            chunks.push(chunk);
+        }
+        chunks.extend(asset_chunks);
+
+        enforce_budgets(&chunks, &self.config.build.budgets)?;
+        let cache_stats = self.cache.stats();
+        Ok(BundleOutput {
+            out_dir,
+            chunks,
+            module_count: collected.len(),
+            tree_shaken_exports,
+            barrel_imports_bypassed,
+            cache_hits: cache_stats.hits,
+            cache_misses: cache_stats.misses,
+            scope_hoisted: false,
+            stats_file: None,
+        })
+    }
+
+    fn emit_named_js_file(
+        &self,
+        out_dir: &Path,
+        file_name: &str,
+        raw_js: &str,
+    ) -> ZerhoResult<Chunk> {
+        let emit_map = self.config.build.sourcemap != SourceMapMode::None;
+        let (mut final_js, map_json) =
+            finalize_js_bundle_with_map(raw_js, file_name, self.config.build.minify, emit_map)?;
+        let hash = ContentHash::from_bytes(final_js.as_bytes());
+        let mut sourcemap_file = None;
+        if let Some(map) = map_json
+            && self.config.build.sourcemap == SourceMapMode::Linked
+        {
+            let map_file = format!("{file_name}.map");
+            let map_path = out_dir.join(&map_file);
+            fs::write(&map_path, map).map_err(|err| ZerhoError::Io {
+                path: Some(map_path),
+                reason: err.to_string(),
+            })?;
+            let _ = write!(final_js, "\n//# sourceMappingURL={map_file}\n");
+            sourcemap_file = Some(map_file);
+        }
+        if self.config.security.secret_scan {
+            scan_for_leaked_secrets(file_name, &final_js)?;
+        }
+        let integrity = self
+            .config
+            .security
+            .sri
+            .then(|| compute_sri_sha384(final_js.as_bytes()));
+        let gzip_bytes = compute_gzip_size(final_js.as_bytes());
+        let br_buf = compress_brotli(final_js.as_bytes());
+        let brotli_bytes = br_buf.len();
+
+        let js_path = out_dir.join(file_name);
+        fs::write(&js_path, &final_js).map_err(|err| ZerhoError::Io {
+            path: Some(js_path),
+            reason: err.to_string(),
+        })?;
+        let brotli_file = if self.config.build.brotli {
+            let br_name = format!("{file_name}.br");
+            let br_path = out_dir.join(&br_name);
+            fs::write(&br_path, &br_buf).map_err(|err| ZerhoError::Io {
+                path: Some(br_path),
+                reason: err.to_string(),
+            })?;
+            Some(br_name)
+        } else {
+            None
+        };
+
+        Ok(Chunk {
+            file_name: file_name.to_owned(),
+            hash,
+            bytes: final_js.len(),
+            gzip_bytes,
+            brotli_bytes,
+            brotli_file,
+            sourcemap_file,
+            integrity,
+        })
     }
 
     fn module_key(&self, canonical: &Path) -> String {
@@ -1128,6 +1290,35 @@ fn assemble_js_bundle(modules: &[CollectedModule], entry_id: &str) -> String {
     );
     out.push_str(entry_id);
     out.push_str("\");\n})();\n");
+    out
+}
+
+/// Emits a reusable Library Mode bundle in either ESM (`.mjs`) or `CommonJS` (`.cjs`) format.
+fn assemble_library_bundle(modules: &[CollectedModule], entry_id: &str, is_esm: bool) -> String {
+    let mut out = String::from("const __zerho_registry = {\n");
+    for module in modules {
+        push_module_factory(&mut out, module);
+    }
+    out.push_str(
+        "};\n\
+         const __zerho_cache = {};\n\
+         function __zerho_require(id) {\n\
+           if (__zerho_cache[id]) return __zerho_cache[id].exports;\n\
+           const factory = __zerho_registry[id];\n\
+           if (!factory) throw new Error(\"[zerho lib] missing module: \" + id);\n\
+           const mod = { exports: {} };\n\
+           __zerho_cache[id] = mod;\n\
+           factory(__zerho_require, mod.exports);\n\
+           return mod.exports;\n\
+         }\n\
+         const __zerho_lib_exports = __zerho_require(\"",
+    );
+    out.push_str(entry_id);
+    if is_esm {
+        out.push_str("\");\nexport default __zerho_lib_exports.default ?? __zerho_lib_exports;\nexport const __exports = __zerho_lib_exports;\n");
+    } else {
+        out.push_str("\");\nmodule.exports = __zerho_lib_exports;\n");
+    }
     out
 }
 
@@ -1494,6 +1685,43 @@ mod tests {
         assert!(stats_path.is_file());
         let stats_html = fs::read_to_string(&stats_path).expect("read stats.html");
         assert!(stats_html.contains("Barrels Bypassed"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn builds_library_mode_esm_and_cjs_bundles() {
+        let dir = std::env::temp_dir().join("zerho-bundler-lib-mode-test");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("src")).expect("create src");
+
+        fs::write(
+            dir.join("src/math.ts"),
+            "export const double = (n: number) => n * 2;\n",
+        )
+        .expect("write math");
+        fs::write(
+            dir.join("src/index.ts"),
+            "import { double } from './math';\nexport function quad(n: number) { return double(double(n)); }\n",
+        )
+        .expect("write lib entry");
+
+        let mut cfg = ZerhoConfig::default();
+        cfg.project.root = dir.clone();
+        cfg.project.name = "my-math-lib".to_owned();
+        cfg.build.lib.entry = Some(PathBuf::from("src/index.ts"));
+        cfg.build.lib.formats = vec!["es".to_owned(), "cjs".to_owned()];
+
+        let out = Bundler::new(cfg).build().expect("library build should succeed");
+        assert!(out.out_dir.join("my-math-lib.mjs").is_file());
+        assert!(out.out_dir.join("my-math-lib.cjs").is_file());
+        assert!(out.out_dir.join("my-math-lib.mjs.br").is_file());
+        assert!(out.out_dir.join("my-math-lib.cjs.br").is_file());
+
+        let esm = fs::read_to_string(out.out_dir.join("my-math-lib.mjs")).expect("read mjs");
+        let cjs = fs::read_to_string(out.out_dir.join("my-math-lib.cjs")).expect("read cjs");
+        assert!(esm.contains("export"));
+        assert!(cjs.contains("module.exports"));
 
         let _ = fs::remove_dir_all(&dir);
     }
