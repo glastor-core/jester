@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Full String-Passing WASM Plugin ABI + Example Plugin (`crates/zerho-plugin/src/wasm.rs`, `examples/wasm-plugin/`):** Passes/returns UTF-8 strings across `wasmtime` linear memory (`zerho_alloc`, `zerho_resolve_id`, `zerho_load`, `zerho_transform`) inside a fuel-capped sandbox, accompanied by a standalone Rust → `wasm32-unknown-unknown` plugin example.
 - **SSR Build Target (`zerho build --ssr` / `build.ssr = true`):** Emits DOM-free Edge/Server ESM bundles (`dist/server.mjs`) with `import.meta.env.SSR = true` targeting Cloudflare Workers, Deno, Node.js, and Bun.
 - **Live Bundle Treemap in `/__inspect` (`crates/zerho-server/src/inspect.html`):** Exposes per-module byte sizes in `/__inspect/api` and renders an interactive filterable Treemap directly inside the dev server DevTools UI.
+- **GLASTOR Core DevSecOps CI/CD Suite (`.github/workflows/audit.yml`, `ci.yml`, `release.yml`, `dependabot.yml`):** Coupled SHA-pinned `glastor-core/specter`, `byte-gauge` (with CycloneDX SBOM on releases), `pii-veil`, and `nemesis`, plus Astro website and `wasm32` example build jobs.
+- **Developer Experience (`cspell.json`, `scripts/spellcheck.ps1`):** Added bilingual (`en,es`) + Rust/zerho CSpell configuration and PowerShell runner.
+
+### Changed
+- **Landing & Docs Portal (`website/`, `https://zerho.xyz`):** Refactored UX/UI (4 interactive capability pillars, unified KPI bar, 3-column benchmarks with CSS comparison bars, 1-click multi-OS install switcher, terminal proof, side-by-side Vite migration diff, sticky 9-crate ledger, complete favicon suite + `isologo.webp`, responsive navbar breakpoints, and `translate="no"` protection for Material Symbols & code).
+- **Technical Documentation Audit (`README.md`, `website/src/pages/docs.astro`):** Synced all features, CLI flags (`--ssr`, `--synthetic`, `--json`, `migrate`), `[build.entries]` script paths, and framework support notes 1:1 with the Rust implementation.
+
+### Security
+- **Repository & `.env` Hygiene (`.gitignore`, `.github/`):** Blocked `.env` / `**/.env.*` globally (allowing `.env.example`), replaced tracked `examples/basic-ts/.env` with `examples/basic-ts/.env.example`, and aligned all `.github/` governance files, templates, `CITATION.cff`, and `Cargo.toml` metadata to `https://github.com/glastor-core/jester` (`main`).
 
 ## [0.8.0] - 2026-11-24
 
