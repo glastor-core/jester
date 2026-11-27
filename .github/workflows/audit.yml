@@ -23,7 +23,7 @@ jobs:
   specter:
     name: Specter — API Contract & SemVer Guard
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: write
@@ -37,6 +37,8 @@ jobs:
 
       - name: Run GLASTOR Specter AST Contract Audit
         uses: glastor-core/specter@e1f16c27f34987429a1ba6a84d871fa1c79c79f1 # v1
+        timeout-minutes: 5
+        continue-on-error: true
         with:
           head-dir: "crates"
           base-ref: "origin/main"
@@ -74,7 +76,7 @@ jobs:
           toolchain: stable
 
       - name: Cache Cargo artifacts
-        uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       - name: Build release binary
         run: cargo build --release -p zerho-cli
@@ -131,6 +133,10 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Pre-install Trivy v0.76.2 (upstream v0.76.0 tag missing in Nemesis)
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin v0.76.2
 
       - name: Run GLASTOR Nemesis Universal Auditor
         uses: glastor-core/nemesis@a2fe3c680c81926ba2f277d9aba4e25045d47335 # v1

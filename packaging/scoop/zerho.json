@@ -1,12 +1,12 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Zero-Node, 100% Safe Rust frontend dev server and production bundler",
   "homepage": "https://zerho.xyz",
   "license": "MIT|Apache-2.0",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/glastor-core/jester/releases/download/v1.0.0/zerho-windows-x86_64.zip",
-      "hash": "b85c924644f99a622f7478fbbe5ab7e412f9f938647ea663e35a60981e968d7f"
+      "url": "https://github.com/glastor-core/jester/releases/download/v1.1.0/zerho-windows-x86_64.zip",
+      "hash": "2e035a18e183f69c23762ef31c818a34d9de9c8068d569241cf93e3c5b1a2647"
     }
   },
   "bin": "zerho.exe",
