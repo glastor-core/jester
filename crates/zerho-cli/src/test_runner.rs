@@ -1,24 +1,29 @@
 //! Native Zero-Node Test Runner (`zerho test`) powered by `oxc`.
 //!
 //! Discovers `*.test.{ts,tsx,js,jsx}` and `*.spec.{ts,tsx,js,jsx}` files, compiles
-//! TypeScript/JSX natively via `zerho-transform`, and evaluates `describe` / `test` /
-//! `it` + `expect(...)` assertions in 100% Safe Rust without Vitest or Node.js.
+//! TypeScript/JSX natively via `zerho-transform`, resolves local module imports via
+//! `zerho-resolver`, and evaluates `describe` / `test` / `it` + `expect(...)` assertions
+//! (including objects, user-defined functions, and local imports) in 100% Safe Rust.
 
 use oxc::allocator::Allocator;
 use oxc::ast::ast::{
-    Argument, BinaryOperator, BindingPattern, CallExpression, Expression, MemberExpression,
-    Statement, UnaryOperator,
+    Argument, ArrowFunctionExpression, BinaryOperator, BindingPattern, CallExpression, Declaration,
+    ExportDefaultDeclarationKind, Expression, Function, MemberExpression, ObjectPropertyKind,
+    PropertyKey, Statement, UnaryOperator,
 };
 use oxc::ast_visit::Visit;
 use oxc::parser::Parser;
-use oxc::span::SourceType;
-use std::collections::HashMap;
+use oxc::span::{GetSpan, SourceType};
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use zerho_core::{Framework, ModuleKind, ZerhoError, ZerhoResult};
 use zerho_plugin::PluginRegistry;
+use zerho_resolver::{OxcResolver, Resolver};
 use zerho_transform::{TransformInput, TransformPipeline};
+
+const MAX_CALL_DEPTH: usize = 64;
 
 #[derive(Debug, Clone, PartialEq)]
 enum JsVal {
@@ -28,6 +33,7 @@ enum JsVal {
     Num(f64),
     Str(String),
     Arr(Vec<Self>),
+    Obj(BTreeMap<String, Self>),
 }
 
 impl JsVal {
@@ -37,7 +43,7 @@ impl JsVal {
             Self::Bool(b) => *b,
             Self::Num(n) => *n != 0.0 && !n.is_nan(),
             Self::Str(s) => !s.is_empty(),
-            Self::Arr(_) => true,
+            Self::Arr(_) | Self::Obj(_) => true,
         }
     }
 
@@ -66,8 +72,38 @@ impl JsVal {
                 let inner: Vec<String> = items.iter().map(Self::display).collect();
                 format!("[{}]", inner.join(", "))
             }
+            Self::Obj(map) => {
+                let pairs: Vec<String> = map
+                    .iter()
+                    .map(|(k, v)| format!("{k}: {}", v.display()))
+                    .collect();
+                format!("{{ {} }}", pairs.join(", "))
+            }
         }
     }
+}
+
+#[derive(Debug, Clone)]
+struct FnDef {
+    params: Vec<String>,
+    /// Standalone JS source wrapping the function body for safe re-parsing on call.
+    wrapped_source: String,
+    is_expr_body: bool,
+    /// Captured module/lexical variables visible when the function was declared.
+    closure_vars: HashMap<String, JsVal>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct EvalCtx {
+    vars: HashMap<String, JsVal>,
+    fns: HashMap<String, FnDef>,
+    depth: usize,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ModuleExports {
+    vars: HashMap<String, JsVal>,
+    fns: HashMap<String, FnDef>,
 }
 
 /// Summary returned by [`run_native_tests`].
@@ -92,6 +128,7 @@ pub fn run_native_tests(root: &Path, filter: Option<&str>) -> ZerhoResult<TestRu
     }
 
     let pipeline = TransformPipeline::new(PluginRegistry::new());
+    let resolver = OxcResolver::new(root);
     let mut passed = 0usize;
     let mut failed = 0usize;
     let mut failures = Vec::new();
@@ -117,7 +154,8 @@ pub fn run_native_tests(root: &Path, filter: Option<&str>) -> ZerhoResult<TestRu
             .to_string_lossy()
             .replace('\\', "/");
 
-        let file_results = execute_compiled_test_module(&rel, &compiled.code)?;
+        let file_results =
+            execute_compiled_test_module(&rel, file, &compiled.code, &resolver, &pipeline)?;
         for (name, outcome) in file_results {
             match outcome {
                 Ok(()) => {
@@ -186,7 +224,13 @@ fn is_test_filename(name: &str) -> bool {
 
 type TestOutcome = (String, Result<(), String>);
 
-fn execute_compiled_test_module(file_label: &str, code: &str) -> ZerhoResult<Vec<TestOutcome>> {
+fn execute_compiled_test_module(
+    file_label: &str,
+    file_path: &Path,
+    code: &str,
+    resolver: &OxcResolver,
+    pipeline: &TransformPipeline,
+) -> ZerhoResult<Vec<TestOutcome>> {
     let allocator = Allocator::default();
     let parsed = Parser::new(&allocator, code, SourceType::mjs()).parse();
     if parsed.panicked {
@@ -196,33 +240,276 @@ fn execute_compiled_test_module(file_label: &str, code: &str) -> ZerhoResult<Vec
         });
     }
 
-    let mut env: HashMap<String, JsVal> = HashMap::new();
+    let mut ctx = EvalCtx::default();
+    load_local_imports(
+        &parsed.program.body,
+        file_path,
+        resolver,
+        pipeline,
+        &mut ctx,
+        0,
+    );
+
     let mut results = Vec::new();
-    eval_statements(&parsed.program.body, "", &mut env, &mut results);
+    eval_statements(&parsed.program.body, code, "", &mut ctx, &mut results);
     Ok(results)
+}
+
+fn load_local_imports(
+    stmts: &[Statement<'_>],
+    importer: &Path,
+    resolver: &OxcResolver,
+    pipeline: &TransformPipeline,
+    ctx: &mut EvalCtx,
+    depth: usize,
+) {
+    if depth >= 16 {
+        return;
+    }
+    for stmt in stmts {
+        let Statement::ImportDeclaration(decl) = stmt else {
+            continue;
+        };
+        let spec = decl.source.value.as_str();
+        let Ok(target) = resolver.resolve(spec, Some(importer)) else {
+            continue;
+        };
+        if target.is_virtual || !target.kind.is_script() {
+            continue;
+        }
+        let Ok(exports) = eval_module_exports(&target.path, resolver, pipeline, depth + 1) else {
+            continue;
+        };
+        let Some(specifiers) = &decl.specifiers else {
+            continue;
+        };
+        for s in specifiers {
+            match s {
+                oxc::ast::ast::ImportDeclarationSpecifier::ImportSpecifier(named) => {
+                    let exported = named.imported.name().as_str();
+                    let local = named.local.name.to_string();
+                    if let Some(val) = exports.vars.get(exported) {
+                        ctx.vars.insert(local.clone(), val.clone());
+                    }
+                    if let Some(f) = exports.fns.get(exported) {
+                        ctx.fns.insert(local, f.clone());
+                    }
+                }
+                oxc::ast::ast::ImportDeclarationSpecifier::ImportDefaultSpecifier(def) => {
+                    let local = def.local.name.to_string();
+                    if let Some(val) = exports.vars.get("default") {
+                        ctx.vars.insert(local.clone(), val.clone());
+                    }
+                    if let Some(f) = exports.fns.get("default") {
+                        ctx.fns.insert(local, f.clone());
+                    }
+                }
+                oxc::ast::ast::ImportDeclarationSpecifier::ImportNamespaceSpecifier(_) => {}
+            }
+        }
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn eval_module_exports(
+    path: &Path,
+    resolver: &OxcResolver,
+    pipeline: &TransformPipeline,
+    depth: usize,
+) -> ZerhoResult<ModuleExports> {
+    let raw = fs::read_to_string(path).map_err(|err| ZerhoError::Io {
+        path: Some(path.to_path_buf()),
+        reason: err.to_string(),
+    })?;
+    let compiled = pipeline.transform(&TransformInput {
+        path: path.to_path_buf(),
+        source: raw,
+        kind: ModuleKind::from_path(path),
+        is_dev: false,
+        framework: Framework::React,
+        minify_css: false,
+    })?;
+
+    let allocator = Allocator::default();
+    let parsed = Parser::new(&allocator, &compiled.code, SourceType::mjs()).parse();
+    if parsed.panicked {
+        return Ok(ModuleExports::default());
+    }
+
+    let mut ctx = EvalCtx::default();
+    load_local_imports(
+        &parsed.program.body,
+        path,
+        resolver,
+        pipeline,
+        &mut ctx,
+        depth,
+    );
+
+    let mut exports = ModuleExports::default();
+    for stmt in &parsed.program.body {
+        match stmt {
+            Statement::VariableDeclaration(decl) => {
+                bind_var_decl(decl, &compiled.code, &mut ctx);
+            }
+            Statement::FunctionDeclaration(func) => {
+                if let Some((name, mut def)) = extract_function_def(func, &compiled.code) {
+                    def.closure_vars.clone_from(&ctx.vars);
+                    ctx.fns.insert(name, def);
+                }
+            }
+            Statement::ExportDeclaration(exp) => match &exp.declaration {
+                Declaration::VariableDeclaration(vdecl) => {
+                    bind_var_decl(vdecl, &compiled.code, &mut ctx);
+                    for d in &vdecl.declarations {
+                        if let BindingPattern::BindingIdentifier(ident) = &d.id {
+                            let name = ident.name.to_string();
+                            if let Some(v) = ctx.vars.get(&name) {
+                                exports.vars.insert(name.clone(), v.clone());
+                            }
+                            if let Some(f) = ctx.fns.get(&name) {
+                                exports.fns.insert(name, f.clone());
+                            }
+                        }
+                    }
+                }
+                Declaration::FunctionDeclaration(func) => {
+                    if let Some((name, mut def)) = extract_function_def(func, &compiled.code) {
+                        def.closure_vars.clone_from(&ctx.vars);
+                        ctx.fns.insert(name.clone(), def.clone());
+                        exports.fns.insert(name, def);
+                    }
+                }
+                _ => {}
+            },
+            Statement::ExportNamedDeclaration(exp) => {
+                for spec in &exp.specifiers {
+                    let local = spec.local.name().as_str();
+                    let exported = spec.exported.name().to_string();
+                    if let Some(v) = ctx.vars.get(local) {
+                        exports.vars.insert(exported.clone(), v.clone());
+                    }
+                    if let Some(f) = ctx.fns.get(local) {
+                        exports.fns.insert(exported, f.clone());
+                    }
+                }
+            }
+            Statement::ExportDefaultDeclaration(exp) => match &exp.declaration {
+                ExportDefaultDeclarationKind::FunctionDeclaration(func) => {
+                    if let Some((_, mut def)) = extract_function_def(func, &compiled.code) {
+                        def.closure_vars.clone_from(&ctx.vars);
+                        exports.fns.insert("default".to_owned(), def);
+                    } else if let Some(mut def) = extract_anon_function_def(func, &compiled.code) {
+                        def.closure_vars.clone_from(&ctx.vars);
+                        exports.fns.insert("default".to_owned(), def);
+                    }
+                }
+                other => {
+                    if let Some(expr) = other.as_expression() {
+                        if let Expression::ArrowFunctionExpression(arrow) = expr {
+                            if let Some(mut def) = extract_arrow_def(arrow, &compiled.code) {
+                                def.closure_vars.clone_from(&ctx.vars);
+                                exports.fns.insert("default".to_owned(), def);
+                            }
+                        } else if let Ok(val) = eval_expr(expr, &ctx) {
+                            exports.vars.insert("default".to_owned(), val);
+                        }
+                    }
+                }
+            },
+            _ => {}
+        }
+    }
+    Ok(exports)
+}
+
+fn bind_var_decl(decl: &oxc::ast::ast::VariableDeclaration<'_>, source: &str, ctx: &mut EvalCtx) {
+    for d in &decl.declarations {
+        if let BindingPattern::BindingIdentifier(ident) = &d.id
+            && let Some(init) = &d.init
+        {
+            if let Expression::ArrowFunctionExpression(arrow) = init {
+                if let Some(def) = extract_arrow_def(arrow, source) {
+                    ctx.fns.insert(ident.name.to_string(), def);
+                }
+            } else if let Expression::FunctionExpression(func) = init {
+                if let Some(def) = extract_anon_function_def(func, source) {
+                    ctx.fns.insert(ident.name.to_string(), def);
+                }
+            } else if let Ok(val) = eval_expr(init, ctx) {
+                ctx.vars.insert(ident.name.to_string(), val);
+            }
+        }
+    }
+}
+
+fn extract_param_names(params: &oxc::ast::ast::FormalParameters<'_>) -> Vec<String> {
+    params
+        .items
+        .iter()
+        .filter_map(|p| match &p.pattern {
+            BindingPattern::BindingIdentifier(id) => Some(id.name.to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn extract_function_def(func: &Function<'_>, source: &str) -> Option<(String, FnDef)> {
+    let name = func.id.as_ref()?.name.to_string();
+    let def = extract_anon_function_def(func, source)?;
+    Some((name, def))
+}
+
+fn extract_anon_function_def(func: &Function<'_>, source: &str) -> Option<FnDef> {
+    let body = func.body.as_ref()?;
+    let span = body.span();
+    let slice = source.get(span.start as usize..span.end as usize)?;
+    Some(FnDef {
+        params: extract_param_names(&func.params),
+        wrapped_source: format!("function __zerho_fn(){slice}"),
+        is_expr_body: false,
+        closure_vars: HashMap::new(),
+    })
+}
+
+fn extract_arrow_def(arrow: &ArrowFunctionExpression<'_>, source: &str) -> Option<FnDef> {
+    let span = arrow.body.span();
+    let slice = source.get(span.start as usize..span.end as usize)?;
+    if slice.trim_start().starts_with('{') {
+        Some(FnDef {
+            params: extract_param_names(&arrow.params),
+            wrapped_source: format!("function __zerho_fn(){slice}"),
+            is_expr_body: false,
+            closure_vars: HashMap::new(),
+        })
+    } else {
+        Some(FnDef {
+            params: extract_param_names(&arrow.params),
+            wrapped_source: format!("function __zerho_fn(){{ return ({slice}); }}"),
+            is_expr_body: true,
+            closure_vars: HashMap::new(),
+        })
+    }
 }
 
 fn eval_statements(
     stmts: &[Statement<'_>],
+    source: &str,
     suite_prefix: &str,
-    env: &mut HashMap<String, JsVal>,
+    ctx: &mut EvalCtx,
     results: &mut Vec<TestOutcome>,
 ) {
     for stmt in stmts {
         match stmt {
-            Statement::VariableDeclaration(decl) => {
-                for d in &decl.declarations {
-                    if let BindingPattern::BindingIdentifier(ident) = &d.id
-                        && let Some(init) = &d.init
-                        && let Ok(val) = eval_expr(init, env)
-                    {
-                        env.insert(ident.name.to_string(), val);
-                    }
+            Statement::VariableDeclaration(decl) => bind_var_decl(decl, source, ctx),
+            Statement::FunctionDeclaration(func) => {
+                if let Some((name, def)) = extract_function_def(func, source) {
+                    ctx.fns.insert(name, def);
                 }
             }
             Statement::ExpressionStatement(expr_stmt) => {
                 if let Expression::CallExpression(call) = &expr_stmt.expression {
-                    handle_test_call(call, suite_prefix, env, results);
+                    handle_test_call(call, source, suite_prefix, ctx, results);
                 }
             }
             _ => {}
@@ -231,9 +518,10 @@ fn eval_statements(
 }
 
 struct FunctionBodyFinder<'a, 'b> {
+    source: &'b str,
     suite_prefix: &'b str,
     is_suite: bool,
-    env: HashMap<String, JsVal>,
+    ctx: EvalCtx,
     results: &'b mut Vec<TestOutcome>,
     test_outcome: Option<Result<(), String>>,
     handled: bool,
@@ -249,20 +537,22 @@ impl<'a> Visit<'a> for FunctionBodyFinder<'a, '_> {
         if self.is_suite {
             eval_statements(
                 &body.statements,
+                self.source,
                 self.suite_prefix,
-                &mut self.env,
+                &mut self.ctx,
                 self.results,
             );
         } else {
-            self.test_outcome = Some(run_test_body(&body.statements, &mut self.env));
+            self.test_outcome = Some(run_test_body(&body.statements, self.source, &mut self.ctx));
         }
     }
 }
 
 fn handle_test_call(
     call: &CallExpression<'_>,
+    source: &str,
     suite_prefix: &str,
-    env: &mut HashMap<String, JsVal>,
+    ctx: &EvalCtx,
     results: &mut Vec<TestOutcome>,
 ) {
     let Expression::Identifier(callee) = &call.callee else {
@@ -275,7 +565,7 @@ fn handle_test_call(
     let Some(first_arg) = call.arguments.first().and_then(Argument::as_expression) else {
         return;
     };
-    let label = match eval_expr(first_arg, env) {
+    let label = match eval_expr(first_arg, ctx) {
         Ok(JsVal::Str(s)) => s,
         _ => "<unnamed>".to_owned(),
     };
@@ -290,9 +580,10 @@ fn handle_test_call(
 
     let is_suite = callee_name == "describe";
     let mut finder = FunctionBodyFinder {
+        source,
         suite_prefix: &full_name,
         is_suite,
-        env: env.clone(),
+        ctx: ctx.clone(),
         results,
         test_outcome: None,
         handled: false,
@@ -304,7 +595,7 @@ fn handle_test_call(
     }
 }
 
-fn run_test_body(stmts: &[Statement<'_>], env: &mut HashMap<String, JsVal>) -> Result<(), String> {
+fn run_test_body(stmts: &[Statement<'_>], source: &str, ctx: &mut EvalCtx) -> Result<(), String> {
     for stmt in stmts {
         match stmt {
             Statement::VariableDeclaration(decl) => {
@@ -312,14 +603,29 @@ fn run_test_body(stmts: &[Statement<'_>], env: &mut HashMap<String, JsVal>) -> R
                     if let BindingPattern::BindingIdentifier(ident) = &d.id
                         && let Some(init) = &d.init
                     {
-                        let val = eval_expr(init, env)?;
-                        env.insert(ident.name.to_string(), val);
+                        if let Expression::ArrowFunctionExpression(arrow) = init {
+                            if let Some(def) = extract_arrow_def(arrow, source) {
+                                ctx.fns.insert(ident.name.to_string(), def);
+                            }
+                        } else if let Expression::FunctionExpression(func) = init {
+                            if let Some(def) = extract_anon_function_def(func, source) {
+                                ctx.fns.insert(ident.name.to_string(), def);
+                            }
+                        } else {
+                            let val = eval_expr(init, ctx)?;
+                            ctx.vars.insert(ident.name.to_string(), val);
+                        }
                     }
+                }
+            }
+            Statement::FunctionDeclaration(func) => {
+                if let Some((name, def)) = extract_function_def(func, source) {
+                    ctx.fns.insert(name, def);
                 }
             }
             Statement::ExpressionStatement(expr_stmt) => {
                 if let Expression::CallExpression(call) = &expr_stmt.expression {
-                    eval_expect_call(call, env)?;
+                    eval_expect_call(call, ctx)?;
                 }
             }
             _ => {}
@@ -328,7 +634,91 @@ fn run_test_body(stmts: &[Statement<'_>], env: &mut HashMap<String, JsVal>) -> R
     Ok(())
 }
 
-fn eval_expect_call(call: &CallExpression<'_>, env: &HashMap<String, JsVal>) -> Result<(), String> {
+fn eval_user_fn(def: &FnDef, args: &[JsVal], parent: &EvalCtx) -> Result<JsVal, String> {
+    if parent.depth >= MAX_CALL_DEPTH {
+        return Err("maximum recursion depth exceeded in native test evaluator".to_owned());
+    }
+    let allocator = Allocator::default();
+    let parsed = Parser::new(&allocator, &def.wrapped_source, SourceType::mjs()).parse();
+    if parsed.panicked {
+        return Err("failed to parse user function body".to_owned());
+    }
+    let Some(Statement::FunctionDeclaration(func)) = parsed.program.body.first() else {
+        return Err("invalid user function wrapper".to_owned());
+    };
+    let Some(body) = &func.body else {
+        return Ok(JsVal::Undefined);
+    };
+
+    let mut merged_vars = parent.vars.clone();
+    for (k, v) in &def.closure_vars {
+        merged_vars.entry(k.clone()).or_insert_with(|| v.clone());
+    }
+    let mut local = EvalCtx {
+        vars: merged_vars,
+        fns: parent.fns.clone(),
+        depth: parent.depth + 1,
+    };
+    for (idx, param) in def.params.iter().enumerate() {
+        let val = args.get(idx).cloned().unwrap_or(JsVal::Undefined);
+        local.vars.insert(param.clone(), val);
+    }
+
+    let _ = def.is_expr_body;
+    eval_fn_block(&body.statements, &def.wrapped_source, &mut local)
+}
+
+fn eval_fn_block(
+    stmts: &[Statement<'_>],
+    source: &str,
+    ctx: &mut EvalCtx,
+) -> Result<JsVal, String> {
+    for stmt in stmts {
+        match stmt {
+            Statement::VariableDeclaration(decl) => bind_var_decl(decl, source, ctx),
+            Statement::FunctionDeclaration(func) => {
+                if let Some((name, def)) = extract_function_def(func, source) {
+                    ctx.fns.insert(name, def);
+                }
+            }
+            Statement::ReturnStatement(ret) => {
+                return match &ret.argument {
+                    Some(expr) => eval_expr(expr, ctx),
+                    None => Ok(JsVal::Undefined),
+                };
+            }
+            Statement::IfStatement(if_stmt) => {
+                let cond = eval_expr(&if_stmt.test, ctx)?;
+                let branch = if cond.is_truthy() {
+                    Some(&if_stmt.consequent)
+                } else {
+                    if_stmt.alternate.as_ref()
+                };
+                if let Some(target) = branch {
+                    match target {
+                        Statement::BlockStatement(block) => {
+                            let val = eval_fn_block(&block.body, source, ctx)?;
+                            if val != JsVal::Undefined {
+                                return Ok(val);
+                            }
+                        }
+                        Statement::ReturnStatement(ret) => {
+                            return match &ret.argument {
+                                Some(expr) => eval_expr(expr, ctx),
+                                None => Ok(JsVal::Undefined),
+                            };
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(JsVal::Undefined)
+}
+
+fn eval_expect_call(call: &CallExpression<'_>, ctx: &EvalCtx) -> Result<(), String> {
     let Some(MemberExpression::StaticMemberExpression(member)) = call.callee.as_member_expression()
     else {
         return Ok(());
@@ -363,12 +753,12 @@ fn eval_expect_call(call: &CallExpression<'_>, env: &HashMap<String, JsVal>) -> 
     else {
         return Err("expect() requires an argument".to_owned());
     };
-    let actual = eval_expr(actual_expr, env)?;
+    let actual = eval_expr(actual_expr, ctx)?;
     let expected = call
         .arguments
         .first()
         .and_then(Argument::as_expression)
-        .map(|e| eval_expr(e, env))
+        .map(|e| eval_expr(e, ctx))
         .transpose()?;
 
     let raw_pass = match matcher {
@@ -407,7 +797,7 @@ fn eval_expect_call(call: &CallExpression<'_>, env: &HashMap<String, JsVal>) -> 
 }
 
 #[allow(clippy::too_many_lines)]
-fn eval_expr(expr: &Expression<'_>, env: &HashMap<String, JsVal>) -> Result<JsVal, String> {
+fn eval_expr(expr: &Expression<'_>, ctx: &EvalCtx) -> Result<JsVal, String> {
     match expr {
         Expression::NumericLiteral(n) => Ok(JsVal::Num(n.value)),
         Expression::StringLiteral(s) => Ok(JsVal::Str(s.value.to_string())),
@@ -417,27 +807,66 @@ fn eval_expr(expr: &Expression<'_>, env: &HashMap<String, JsVal>) -> Result<JsVa
             if id.name.as_str() == "undefined" {
                 Ok(JsVal::Undefined)
             } else {
-                env.get(id.name.as_str())
+                ctx.vars
+                    .get(id.name.as_str())
                     .cloned()
                     .ok_or_else(|| format!("undefined identifier `{}`", id.name))
             }
         }
-        Expression::ParenthesizedExpression(p) => eval_expr(&p.expression, env),
+        Expression::ParenthesizedExpression(p) => eval_expr(&p.expression, ctx),
         Expression::ArrayExpression(arr) => {
             let mut items = Vec::with_capacity(arr.elements.len());
             for el in &arr.elements {
                 if let Some(e) = el.as_expression() {
-                    items.push(eval_expr(e, env)?);
+                    items.push(eval_expr(e, ctx)?);
                 }
             }
             Ok(JsVal::Arr(items))
+        }
+        Expression::ObjectExpression(obj) => {
+            let mut map = BTreeMap::new();
+            for prop in &obj.properties {
+                if let ObjectPropertyKind::ObjectProperty(p) = prop {
+                    let key = match &p.key {
+                        PropertyKey::StaticIdentifier(id) => id.name.to_string(),
+                        PropertyKey::StringLiteral(s) => s.value.to_string(),
+                        PropertyKey::NumericLiteral(n) => n.value.to_string(),
+                        _ => continue,
+                    };
+                    let val = eval_expr(&p.value, ctx)?;
+                    map.insert(key, val);
+                }
+            }
+            Ok(JsVal::Obj(map))
+        }
+        Expression::CallExpression(call) => {
+            if let Expression::Identifier(callee) = &call.callee
+                && let Some(def) = ctx.fns.get(callee.name.as_str())
+            {
+                let mut evaluated_args = Vec::with_capacity(call.arguments.len());
+                for arg in &call.arguments {
+                    if let Some(e) = arg.as_expression() {
+                        evaluated_args.push(eval_expr(e, ctx)?);
+                    }
+                }
+                return eval_user_fn(def, &evaluated_args, ctx);
+            }
+            Err("unsupported call expression in native test evaluator".to_owned())
+        }
+        Expression::ConditionalExpression(cond) => {
+            let test = eval_expr(&cond.test, ctx)?;
+            if test.is_truthy() {
+                eval_expr(&cond.consequent, ctx)
+            } else {
+                eval_expr(&cond.alternate, ctx)
+            }
         }
         Expression::TemplateLiteral(tpl) => {
             let mut out = String::new();
             for (i, q) in tpl.quasis.iter().enumerate() {
                 out.push_str(q.value.raw.as_str());
                 if let Some(e) = tpl.expressions.get(i) {
-                    let v = eval_expr(e, env)?;
+                    let v = eval_expr(e, ctx)?;
                     match v {
                         JsVal::Str(s) => out.push_str(&s),
                         other => out.push_str(&other.display()),
@@ -447,7 +876,7 @@ fn eval_expr(expr: &Expression<'_>, env: &HashMap<String, JsVal>) -> Result<JsVa
             Ok(JsVal::Str(out))
         }
         Expression::UnaryExpression(u) => {
-            let v = eval_expr(&u.argument, env)?;
+            let v = eval_expr(&u.argument, ctx)?;
             match u.operator {
                 UnaryOperator::LogicalNot => Ok(JsVal::Bool(!v.is_truthy())),
                 UnaryOperator::UnaryNegation => v
@@ -462,27 +891,42 @@ fn eval_expr(expr: &Expression<'_>, env: &HashMap<String, JsVal>) -> Result<JsVa
             }
         }
         Expression::BinaryExpression(bin) => {
-            let left = eval_expr(&bin.left, env)?;
-            let right = eval_expr(&bin.right, env)?;
+            let left = eval_expr(&bin.left, ctx)?;
+            let right = eval_expr(&bin.right, ctx)?;
             eval_binary(bin.operator, &left, &right)
         }
         Expression::StaticMemberExpression(member) => {
-            let obj = eval_expr(&member.object, env)?;
-            if member.property.name.as_str() == "length" {
-                match obj {
-                    JsVal::Str(s) => Ok(JsVal::Num(f64::from(
-                        u32::try_from(s.len()).unwrap_or(u32::MAX),
-                    ))),
-                    JsVal::Arr(a) => Ok(JsVal::Num(f64::from(
-                        u32::try_from(a.len()).unwrap_or(u32::MAX),
-                    ))),
-                    _ => Err("property `length` not found".to_owned()),
-                }
-            } else {
-                Err(format!("unsupported property `.{}`", member.property.name))
+            let obj = eval_expr(&member.object, ctx)?;
+            let prop = member.property.name.as_str();
+            match obj {
+                JsVal::Obj(map) => Ok(map.get(prop).cloned().unwrap_or(JsVal::Undefined)),
+                JsVal::Str(s) if prop == "length" => Ok(JsVal::Num(f64::from(
+                    u32::try_from(s.len()).unwrap_or(u32::MAX),
+                ))),
+                JsVal::Arr(a) if prop == "length" => Ok(JsVal::Num(f64::from(
+                    u32::try_from(a.len()).unwrap_or(u32::MAX),
+                ))),
+                _ => Err(format!("unsupported property `.{prop}`")),
             }
         }
-        Expression::ArrowFunctionExpression(_) => Ok(JsVal::Undefined),
+        Expression::ComputedMemberExpression(member) => {
+            let obj = eval_expr(&member.object, ctx)?;
+            let key = eval_expr(&member.expression, ctx)?;
+            match (obj, key) {
+                (JsVal::Obj(map), JsVal::Str(k)) => {
+                    Ok(map.get(&k).cloned().unwrap_or(JsVal::Undefined))
+                }
+                (JsVal::Arr(items), JsVal::Num(n)) if n >= 0.0 && n.fract() == 0.0 => {
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    let idx = n as usize;
+                    Ok(items.get(idx).cloned().unwrap_or(JsVal::Undefined))
+                }
+                _ => Err("unsupported computed member access".to_owned()),
+            }
+        }
+        Expression::ArrowFunctionExpression(_) | Expression::FunctionExpression(_) => {
+            Ok(JsVal::Undefined)
+        }
         _ => Err("unsupported expression in native test evaluator".to_owned()),
     }
 }
@@ -560,6 +1004,48 @@ mod tests {
         assert_eq!(summary.passed, 1);
         assert_eq!(summary.failed, 1);
         assert!(summary.failures[0].contains("expected 4 toBe(5)"));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn evaluates_local_imports_objects_and_user_functions() {
+        let root =
+            std::env::temp_dir().join(format!("zerho-native-test-imports-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("src")).expect("create src");
+
+        fs::write(
+            root.join("src/utils.ts"),
+            "export const OFFSET: number = 2;\n\
+             export function add(a: number, b: number): number {\n\
+               return a + b + OFFSET;\n\
+             }\n\
+             export const makeUser = (name: string) => ({ name, active: true });\n\
+             export default function double(n: number): number { return n * 2; }\n",
+        )
+        .expect("write utils.ts");
+
+        fs::write(
+            root.join("src/utils.test.ts"),
+            "import double, { add, makeUser } from './utils';\n\
+             describe('local imports + objects + functions', () => {\n\
+               test('calls imported TS functions and reads object properties', () => {\n\
+                 const total = add(20, 20);\n\
+                 expect(total).toBe(42);\n\
+                 expect(double(21)).toBe(42);\n\
+                 const user = makeUser('Ada');\n\
+                 expect(user.name).toBe('Ada');\n\
+                 expect(user).toEqual({ name: 'Ada', active: true });\n\
+               });\n\
+             });\n",
+        )
+        .expect("write utils.test.ts");
+
+        let summary = run_native_tests(&root, None).expect("run native import tests");
+        assert_eq!(summary.files, 1);
+        assert_eq!(summary.passed, 1);
+        assert_eq!(summary.failed, 0, "failures: {:?}", summary.failures);
 
         let _ = fs::remove_dir_all(&root);
     }

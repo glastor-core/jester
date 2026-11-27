@@ -20,6 +20,20 @@ pub struct BarrelExport {
 ///
 /// Returns `None` if the module contains any runtime statement, local declaration, or `export *`.
 pub fn parse_pure_barrel(source: &str, path: &Path) -> Option<BTreeMap<String, BarrelExport>> {
+    parse_barrel_exports(source, path, false)
+}
+
+/// Extracts `export { orig as exported } from './leaf'` re-exports from a barrel file.
+///
+/// When `side_effect_free` is `true` (e.g. owning `package.json` declares `"sideEffects": false`),
+/// auxiliary statements such as namespace re-exports (`import * as index; export { index as icons }`)
+/// are tolerated so callers importing direct re-exports (e.g. `import { Zap } from 'lucide-react'`)
+/// bypass thousands of unused sibling modules.
+pub fn parse_barrel_exports(
+    source: &str,
+    path: &Path,
+    side_effect_free: bool,
+) -> Option<BTreeMap<String, BarrelExport>> {
     let source_type = SourceType::from_path(path).unwrap_or_else(|_| SourceType::mjs());
     let allocator = Allocator::default();
     let parsed = Parser::new(&allocator, source, source_type).parse();
@@ -54,6 +68,7 @@ pub fn parse_pure_barrel(source: &str, path: &Path) -> Option<BTreeMap<String, B
             Statement::EmptyStatement(_)
             | Statement::TSTypeAliasDeclaration(_)
             | Statement::TSInterfaceDeclaration(_) => {}
+            _ if side_effect_free => {}
             _ => return None,
         }
     }

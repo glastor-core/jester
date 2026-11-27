@@ -8,7 +8,7 @@
 
   <p>
     <a href="https://zerho.xyz"><img src="https://img.shields.io/badge/Portal-zerho.xyz-f97316?style=for-the-badge" alt="Portal zerho.xyz" /></a>
-    <a href="https://github.com/glastor-core/jester/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/Release-v1.0.0-10b981?style=for-the-badge" alt="Release v1.0.0" /></a>
+    <a href="https://github.com/glastor-core/jester/releases"><img src="https://img.shields.io/badge/Version-v1.1.0-10b981?style=for-the-badge" alt="Version v1.1.0" /></a>
     <a href="https://github.com/glastor-core/jester/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/glastor-core/jester/ci.yml?branch=main&label=CI&style=for-the-badge" alt="CI Status" /></a>
     <a href="https://github.com/glastor-core/jester/actions/workflows/audit.yml"><img src="https://img.shields.io/github/actions/workflow/status/glastor-core/jester/audit.yml?branch=main&label=GLASTOR%20DevSecOps&style=for-the-badge" alt="DevSecOps Audit" /></a>
     <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/Rust-unsafe__code%20%3D%20forbid-0f172a?style=for-the-badge" alt="100% Safe Rust" /></a>
@@ -20,13 +20,15 @@
     <a href="#migrate-from-vite-in-1-command">Migrate from Vite</a> ·
     <a href="#real---release-benchmarks">Benchmarks</a> ·
     <a href="#architecture">Architecture</a> ·
+    <a href="https://zerho.xyz/demo/">Live Demo</a> ·
     <a href="https://zerho.xyz/docs">Docs</a>
   </p>
 </div>
 
 ---
 
-`zerho` ships as a **single stripped native Rust binary** (`unsafe_code = "forbid"`, `clippy::pedantic -D warnings`, **65/65** passing unit + real-app E2E tests) powered by **`oxc`**, **`lightningcss`**, **`oxc_resolver`**, **`redb`**, **`blake3`**, **`rayon`**, **`axum`**, and **`wasmtime v29`**.
+`zerho` ships as a **single stripped native Rust binary** (`unsafe_code = "forbid"`, `clippy::pedantic -D warnings`, **68/68** passing unit + E2E tests + real npm `react`/`zustand`/`lucide-react` CI E2E) powered by **`oxc`**, **`lightningcss`**, **`oxc_resolver`**, **`redb`**, **`blake3`**, **`rayon`**, **`axum`**, and **`wasmtime v29`**.
+`zerho` ships as a **single stripped native Rust binary** (`unsafe_code = "forbid"`, `clippy::pedantic -D warnings`, **72/72** passing unit + E2E tests + real Chromium `react`/`zustand`/`lucide-react` CI E2E) powered by **`oxc`**, **`lightningcss`**, **`oxc_resolver`**, **`redb`**, **`blake3`**, **`rayon`**, **`axum`**, and **`wasmtime v29`**.
 
 Build, serve, test, and ship **React, Preact, TypeScript, Web Workers, `.wasm`, and Edge SSR** apps with declarative `zerho.toml` configuration — **zero Node.js processes, zero Babel/PostCSS/Rollup glue, zero 400 MB `node_modules` toolchain tax**.
 
@@ -96,25 +98,27 @@ zerho migrate             # writes zerho.toml + zerho.schema.json
 
 `zerho migrate` inspects `vite.config.{ts,mts,js,mjs}`, `package.json`, `index.html`, and `tsconfig.json` and generates a validated declarative `zerho.toml` replacing multiple Node plugins with native Rust defaults:
 
-| Capability | Typical Vite Setup | `zerho v1.0.0` (Built-In) |
+| Capability | Typical Vite Setup | `zerho v1.1.0` (Built-In) |
 | :--- | :--- | :--- |
 | Runtime & Footprint | Node.js + npm plugins (`~240 MB`) | Single native Rust binary (`16.60 MB`) |
 | TS / JSX / Fast Refresh | `@vitejs/plugin-react` + esbuild/oxc | 100% in-process `oxc` + `$RefreshReg$` |
-| `tsconfig.json` `paths` | `vite-tsconfig-paths` | Native `oxc_resolver` |
+| `tsconfig.json` `paths` & `?raw`/`?url` | `vite-tsconfig-paths` + Vite asset queries | Native `oxc_resolver` + `?raw` / `?url` in dev & build |
+| Barrel & `sideEffects: false` | Rollup/esbuild | Native AST Barrel Bypass (`lucide-react`: `2,158 → 28` mods, `64.9 KB` Brotli) |
 | Brotli + Bundle Analyzer | `vite-plugin-compression` + visualizer | `build.brotli = true` + `--analyze` (`dist/stats.html`) + `/__inspect` Treemap |
 | Security (SRI / CSP / Secrets) | Multiple external plugins | Native SHA-384 SRI, `dist/csp.json`, Gzip budgets & Secret Leak Guard |
-| Plugin Isolation | Full-privilege Node.js JS plugins | Fuel-metered `wasmtime v29` WASM (`zerho:plugin@0.1.0`) |
-| Testing | Vitest + Node.js | Built-in `zerho test` (`oxc` evaluator) |
+| Plugin Isolation | Full-privilege Node.js JS plugins | Fuel-metered `wasmtime v29` WASM (`zerho:plugin@0.1.0`) + prebuilt `.wasm` releases |
+| Testing | Vitest + Node.js | Built-in `zerho test` (`oxc` evaluator with local TS imports, objects & functions) |
 
 ---
 
-## Capabilities (`v1.0.0`)
+## Capabilities (`v1.1.0`)
 
-- **Compiler & Assets (`zerho-transform`):** Sub-millisecond `oxc` TS/JSX transforms, native React Fast Refresh, `oxc_minifier` + `oxc_mangler` + DCE, lexical Scope Hoisting, Barrel File Optimizer, deep multi-file CommonJS ↔ ESM pre-bundler, `lightningcss` CSS Modules + `@import`/`url(...)` rewriting, Web Worker `new URL(..., import.meta.url)` rewriting, and pure-Rust SVG/WebP optimization.
-- **Dev Server & Cache Daemon (`zerho-server`):** Zero-Node `axum` + `tokio` + `notify` dev server, granular WebSocket HMR (`import.meta.hot`), Shadow DOM Error Overlay, zero-waterfall Dev Partial Bundling (`/@zerho/bundle`), HTTP reverse proxy (`[server.proxy]`), built-in `/__inspect` UI with **Live Bundle Treemap**, Brotli `PreviewServer`, and standalone `zerho cache-server` HTTP CAS daemon.
-- **Bundler, MPA, Library & Edge SSR (`zerho-bundler`):** `rayon` wave-parallel builds, incremental ACID `redb` + HTTP remote team cache (`cache.remote_url`), Shared Chunks + `<link rel="modulepreload">`, Multi-Page Apps (`[build.entries]`), Library Mode (`[build.lib]` `.mjs`/`.cjs`), Web Worker chunks + `.wasm` `WebAssembly.instantiateStreaming` loaders, Edge SSR (`--ssr`), Brotli `.br`, SHA-384 SRI, `dist/csp.json`, Gzip budgets, `zerho check`, and `dist/stats.html`.
-- **WASM Plugin Ecosystem (`zerho-plugin`):** Fuel-metered `wasmtime v29` sandbox with UTF-8 linear-memory hooks (`zerho_alloc`, `zerho_resolve_id`, `zerho_load`, `zerho_transform`) plus standalone Rust → `wasm32-unknown-unknown` plugins in [`examples/wasm-plugin/`](examples/wasm-plugin/README.md) and [`examples/plugins/`](examples/plugins/) (`vue-sfc`, `svelte`, `solid`).
+- **Compiler & Assets (`zerho-transform`):** Sub-millisecond `oxc` TS/JSX transforms, native React Fast Refresh, `oxc_minifier` + `oxc_mangler` + DCE, lexical Scope Hoisting, `"sideEffects": false` Barrel File Optimizer (`lucide-react`, `lodash-es`), singleton CommonJS ↔ ESM interop with dead `NODE_ENV` branch pruning, `lightningcss` CSS Modules + `@import`/`url(...)` rewriting, Vite-compatible `?raw` & `?url` asset queries, Web Worker `new URL(..., import.meta.url)` rewriting, and pure-Rust SVG/WebP optimization.
+- **Dev Server & Cache Daemon (`zerho-server`):** Zero-Node `axum` + `tokio` + `notify` dev server, granular WebSocket HMR (`import.meta.hot`), dev CSS `@import` inlining, dev Barrel Optimizer + singleton `/@zerho/deps/*` CJS pre-bundler (Chromium-verified with React 19 + Zustand + Lucide), Shadow DOM Error Overlay, zero-waterfall Dev Partial Bundling (`/@zerho/bundle`), HTTP reverse proxy (`[server.proxy]`), built-in `/__inspect` UI with **Live Bundle Treemap**, Brotli `PreviewServer`, and standalone `zerho cache-server` HTTP CAS daemon.
+- **Bundler, MPA, Library & Edge SSR (`zerho-bundler`):** `rayon` wave-parallel builds, configurable `[build].base` subpath/CDN URLs & `[build].empty_out_dir = true`, incremental ACID `redb` + HTTP remote team cache (`cache.remote_url`), Shared Chunks + `<link rel="modulepreload">`, Multi-Page Apps (`[build.entries]`), Library Mode (`[build.lib]` `.mjs`/`.cjs`), Web Worker chunks + `.wasm` `WebAssembly.instantiateStreaming` loaders, Edge SSR (`--ssr`), Brotli `.br`, SHA-384 SRI, `dist/csp.json`, Gzip budgets, `zerho check`, and `dist/stats.html`.
+- **WASM Plugin Ecosystem (`zerho-plugin`):** Fuel-metered `wasmtime v29` sandbox with UTF-8 linear-memory hooks (`zerho_alloc`, `zerho_resolve_id`, `zerho_load`, `zerho_transform`), standalone Rust → `wasm32-unknown-unknown` plugins in [`examples/wasm-plugin/`](examples/wasm-plugin/README.md) and [`examples/plugins/`](examples/plugins/) (`vue-sfc`, `svelte`, `solid`), plus precompiled `.wasm` + `.sha256` binaries published on GitHub Releases.
 
+> **Real-Browser Verified Stack:** Both `zerho dev` and `zerho build` + `zerho preview` are continuously verified in real headless Chromium (CDP, `scripts/verify-chromium-e2e.mjs`) against live npm `react` 19, `react-dom`, `zustand`, and `lucide-react` (`28` modules, `64.92 KB` Brotli, `0` console errors, live DOM click state updates).
 > **Honest Scope:** Ideal today for React, Preact, TypeScript SPAs, MPAs, libraries, Web Workers/`.wasm`, and Edge SSR without Node.js. If your app depends heavily on Vue SFC, SvelteKit, Nuxt, or legacy Rollup/Vite JS plugins, stay on Vite for now.
 
 ---

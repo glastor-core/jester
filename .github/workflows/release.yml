@@ -82,3 +82,37 @@ jobs:
             ${{ matrix.archive }}
             ${{ matrix.archive }}.sha256
             zerho-*.sbom.cdx.json
+
+  build-wasm-plugins:
+    name: Build Official WASM Plugins (wasm32)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain with wasm32 target
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+
+      - name: Build official Vue, Svelte, and Solid WASM plugins
+        run: |
+          mkdir -p wasm-dist
+          for plugin in vue-sfc svelte solid; do
+            cargo build --manifest-path "examples/plugins/${plugin}/Cargo.toml" --target wasm32-unknown-unknown --release
+            wasm_crate="zerho_plugin_${plugin//-/_}.wasm"
+            out_name="zerho-plugin-${plugin}.wasm"
+            cp "examples/plugins/${plugin}/target/wasm32-unknown-unknown/release/${wasm_crate}" "wasm-dist/${out_name}"
+            (cd wasm-dist && sha256sum "${out_name}" > "${out_name}.sha256")
+          done
+
+      - name: Upload precompiled WASM plugins to Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: |
+            wasm-dist/*.wasm
+            wasm-dist/*.wasm.sha256

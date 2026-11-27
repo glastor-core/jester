@@ -434,3 +434,113 @@ async fn e2e_modern_react_ecosystem_packages_and_dashboard() {
 
     let _ = fs::remove_dir_all(&root);
 }
+
+/// Real npm integration test against actual registry packages (`react`, `react-dom`, `zustand`, `lucide-react`).
+/// Runs in CI (`e2e-real-npm` job) or locally via:
+/// `ZERHO_REAL_NPM_APP_DIR=/path/to/app cargo test -p zerho-cli --test e2e_real_apps e2e_real_npm_react_zustand_lucide -- --ignored`
+#[tokio::test]
+#[ignore = "requires real npm packages in ZERHO_REAL_NPM_APP_DIR"]
+async fn e2e_real_npm_react_zustand_lucide() {
+    let root = PathBuf::from(
+        std::env::var("ZERHO_REAL_NPM_APP_DIR")
+            .expect("ZERHO_REAL_NPM_APP_DIR must point to a directory with react, react-dom, zustand, lucide-react installed"),
+    );
+    assert!(
+        root.join("node_modules/react/package.json").is_file(),
+        "missing real react package in {}",
+        root.display()
+    );
+    assert!(
+        root.join("node_modules/zustand/package.json").is_file(),
+        "missing real zustand package in {}",
+        root.display()
+    );
+    assert!(
+        root.join("node_modules/lucide-react/package.json")
+            .is_file(),
+        "missing real lucide-react package in {}",
+        root.display()
+    );
+
+    write_file(
+        &root.join("index.html"),
+        "<!doctype html><html><head><title>Real NPM E2E</title></head>\
+         <body><div id=\"root\"></div><script type=\"module\" src=\"/src/main.tsx\"></script></body></html>",
+    );
+    write_file(
+        &root.join("src/styles.css"),
+        "body { margin: 0; background: #090d14; color: #f8fafc; }\n",
+    );
+    write_file(
+        &root.join("src/main.tsx"),
+        "import './styles.css';\n\
+         import { createRoot } from 'react-dom/client';\n\
+         import { create } from 'zustand';\n\
+         import { Zap } from 'lucide-react';\n\
+         interface CounterState { count: number; inc: () => void }\n\
+         const useCounter = create<CounterState>((set) => ({\n\
+           count: 1,\n\
+           inc: () => set((s) => ({ count: s.count + 1 })),\n\
+         }));\n\
+         function App() {\n\
+           const { count, inc } = useCounter();\n\
+           return (\n\
+             <main>\n\
+               <Zap size={20} />\n\
+               <button onClick={inc}>Count: {count}</button>\n\
+             </main>\n\
+           );\n\
+         }\n\
+         const el = document.getElementById('root');\n\
+         if (el) createRoot(el).render(<App />);\n",
+    );
+
+    let mut cfg = ZerhoConfig::default();
+    cfg.project.root.clone_from(&root);
+    cfg.project.entry = PathBuf::from("src/main.tsx");
+    cfg.project.framework = Framework::React;
+    cfg.build.base = "/app/".to_owned();
+    cfg.build.empty_out_dir = true;
+    cfg.build.brotli = true;
+    cfg.security.sri = true;
+    cfg.security.csp = true;
+
+    // 1. Live DevServer serves entry TSX cleanly against real node_modules
+    let dev = DevServer::new(cfg.clone());
+    let dev_addr = spawn_router(dev.router()).await;
+    let tsx_resp = http_get(dev_addr, "/src/main.tsx", "").await;
+    assert!(
+        tsx_resp.starts_with("HTTP/1.1 200"),
+        "GET /src/main.tsx failed on real npm app: {tsx_resp}"
+    );
+
+    // 2. Production build with real react + react-dom + zustand + lucide-react
+    let mut bundler = Bundler::new(cfg.clone());
+    let out = bundler
+        .build()
+        .expect("real npm React + Zustand + Lucide production build should succeed");
+    assert!(
+        out.module_count >= 5,
+        "expected >= 5 resolved modules from real npm packages, got {}",
+        out.module_count
+    );
+
+    let html = fs::read_to_string(out.out_dir.join("index.html")).expect("read dist/index.html");
+    assert!(
+        html.contains("src=\"/app/assets/index-"),
+        "dist/index.html should use /app/ base: {html}"
+    );
+    assert!(
+        html.contains("integrity=\"sha384-"),
+        "dist/index.html missing SRI"
+    );
+
+    // 3. PreviewServer serves built output
+    let preview = PreviewServer::new(cfg);
+    let prev_addr = spawn_router(preview.router()).await;
+    let prev_html = http_get(prev_addr, "/", "").await;
+    assert!(
+        prev_html.starts_with("HTTP/1.1 200"),
+        "PreviewServer GET / failed: {prev_html}"
+    );
+}

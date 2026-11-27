@@ -1,5 +1,5 @@
 use oxc::allocator::Allocator;
-use oxc::ast::ast::{Argument, CallExpression, Expression};
+use oxc::ast::ast::{Argument, BinaryOperator, CallExpression, Expression, IfStatement};
 use oxc::ast_visit::Visit;
 use oxc::parser::Parser;
 use oxc::span::{SourceType, Span};
@@ -9,9 +9,74 @@ use zerho_core::{ZerhoError, ZerhoResult};
 
 struct CjsRequireCollector {
     calls: Vec<(Span, String)>,
+    /// When `Some(true)` (production), skip dead `process.env.NODE_ENV !== 'production'` branches.
+    is_production: Option<bool>,
+}
+
+fn is_process_env_node_env(expr: &Expression<'_>) -> bool {
+    let Expression::StaticMemberExpression(outer) = expr else {
+        return false;
+    };
+    if outer.property.name.as_str() != "NODE_ENV" {
+        return false;
+    }
+    let Expression::StaticMemberExpression(inner) = &outer.object else {
+        return false;
+    };
+    if inner.property.name.as_str() != "env" {
+        return false;
+    }
+    matches!(&inner.object, Expression::Identifier(id) if id.name.as_str() == "process")
+}
+
+fn eval_node_env_condition(expr: &Expression<'_>, is_production: bool) -> Option<bool> {
+    let Expression::BinaryExpression(bin) = expr else {
+        return None;
+    };
+    let is_eq = match bin.operator {
+        BinaryOperator::StrictEquality | BinaryOperator::Equality => true,
+        BinaryOperator::StrictInequality | BinaryOperator::Inequality => false,
+        _ => return None,
+    };
+    let target_env = if is_process_env_node_env(&bin.left) {
+        if let Expression::StringLiteral(lit) = &bin.right {
+            lit.value.as_str()
+        } else {
+            return None;
+        }
+    } else if is_process_env_node_env(&bin.right) {
+        if let Expression::StringLiteral(lit) = &bin.left {
+            lit.value.as_str()
+        } else {
+            return None;
+        }
+    } else {
+        return None;
+    };
+    let current = if is_production {
+        "production"
+    } else {
+        "development"
+    };
+    let eq_result = current == target_env;
+    Some(if is_eq { eq_result } else { !eq_result })
 }
 
 impl<'a> Visit<'a> for CjsRequireCollector {
+    fn visit_if_statement(&mut self, stmt: &IfStatement<'a>) {
+        if let Some(is_prod) = self.is_production
+            && let Some(branch) = eval_node_env_condition(&stmt.test, is_prod)
+        {
+            if branch {
+                self.visit_statement(&stmt.consequent);
+            } else if let Some(alt) = &stmt.alternate {
+                self.visit_statement(alt);
+            }
+            return;
+        }
+        oxc::ast_visit::walk::walk_if_statement(self, stmt);
+    }
+
     fn visit_call_expression(&mut self, call: &CallExpression<'a>) {
         if let Expression::Identifier(ident) = &call.callee
             && ident.name == "require"
@@ -34,7 +99,10 @@ pub fn collect_cjs_requires(source: &str, path: &Path) -> ZerhoResult<Vec<String
             reason: messages.join("\n"),
         });
     }
-    let mut collector = CjsRequireCollector { calls: Vec::new() };
+    let mut collector = CjsRequireCollector {
+        calls: Vec::new(),
+        is_production: None,
+    };
     collector.visit_program(&parsed.program);
     let mut seen = HashSet::new();
     let mut out = Vec::new();
@@ -50,6 +118,26 @@ pub fn collect_cjs_requires(source: &str, path: &Path) -> ZerhoResult<Vec<String
 pub fn rewrite_cjs_requires(
     source: &str,
     path: &Path,
+    rewriter: impl FnMut(&str) -> Option<String>,
+) -> ZerhoResult<String> {
+    rewrite_cjs_requires_inner(source, path, None, rewriter)
+}
+
+/// Rewrites `require("...")` string literal arguments while pruning dead `process.env.NODE_ENV`
+/// branches (e.g. skipping `react-dom-client.development.js` during production builds).
+pub fn rewrite_cjs_requires_for_env(
+    source: &str,
+    path: &Path,
+    is_production: bool,
+    rewriter: impl FnMut(&str) -> Option<String>,
+) -> ZerhoResult<String> {
+    rewrite_cjs_requires_inner(source, path, Some(is_production), rewriter)
+}
+
+fn rewrite_cjs_requires_inner(
+    source: &str,
+    path: &Path,
+    is_production: Option<bool>,
     mut rewriter: impl FnMut(&str) -> Option<String>,
 ) -> ZerhoResult<String> {
     let allocator = Allocator::default();
@@ -62,7 +150,10 @@ pub fn rewrite_cjs_requires(
         });
     }
 
-    let mut collector = CjsRequireCollector { calls: Vec::new() };
+    let mut collector = CjsRequireCollector {
+        calls: Vec::new(),
+        is_production,
+    };
     collector.visit_program(&parsed.program);
 
     let mut edits: Vec<(Span, String)> = Vec::new();
@@ -155,6 +246,209 @@ pub fn prebundle_cjs_graph_to_esm(
 
 fn normalize_cjs_key(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
+}
+
+/// Scans CJS source for static `exports.<ident> =` assignments so browser ESM wrappers
+/// can re-export named bindings (`export const createRoot = __zerho_cjs_entry.createRoot;`).
+fn collect_static_cjs_export_names(source: &str, out: &mut std::collections::BTreeSet<String>) {
+    let bytes = source.as_bytes();
+    let needle = b"exports.";
+    let mut i = 0;
+    while i + needle.len() < bytes.len() {
+        if &bytes[i..i + needle.len()] == needle {
+            let prev_ok = i == 0
+                || !(bytes[i - 1].is_ascii_alphanumeric()
+                    || bytes[i - 1] == b'_'
+                    || bytes[i - 1] == b'$'
+                    || bytes[i - 1] == b'.');
+            if prev_ok {
+                let start = i + needle.len();
+                let mut end = start;
+                while end < bytes.len()
+                    && (bytes[end].is_ascii_alphanumeric()
+                        || bytes[end] == b'_'
+                        || bytes[end] == b'$')
+                {
+                    end += 1;
+                }
+                if end > start {
+                    let mut after = end;
+                    while after < bytes.len() && bytes[after].is_ascii_whitespace() {
+                        after += 1;
+                    }
+                    if after < bytes.len()
+                        && bytes[after] == b'='
+                        && bytes.get(after + 1) != Some(&b'=')
+                    {
+                        let name = &source[start..end];
+                        if is_valid_esm_export_ident(name) {
+                            out.insert(name.to_owned());
+                        }
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+}
+
+fn is_valid_esm_export_ident(name: &str) -> bool {
+    if name.is_empty()
+        || matches!(
+            name,
+            "default"
+                | "__esModule"
+                | "break"
+                | "case"
+                | "catch"
+                | "class"
+                | "const"
+                | "continue"
+                | "debugger"
+                | "delete"
+                | "do"
+                | "else"
+                | "enum"
+                | "export"
+                | "extends"
+                | "false"
+                | "finally"
+                | "for"
+                | "function"
+                | "if"
+                | "import"
+                | "in"
+                | "instanceof"
+                | "new"
+                | "null"
+                | "return"
+                | "super"
+                | "switch"
+                | "this"
+                | "throw"
+                | "true"
+                | "try"
+                | "typeof"
+                | "var"
+                | "void"
+                | "while"
+                | "with"
+        )
+    {
+        return false;
+    }
+    let first = name.as_bytes()[0];
+    first.is_ascii_alphabetic() || first == b'_' || first == b'$'
+}
+
+fn is_bare_cjs_specifier(spec: &str) -> bool {
+    !spec.starts_with('.') && !spec.starts_with('/') && !spec.starts_with("http")
+}
+
+/// Dev-server `CommonJS` -> browser ESM pre-bundler:
+/// - Inlines relative `require("./...")` files within the same package (pruning dead `NODE_ENV` branches).
+/// - Keeps bare external `require("react")` / `require("scheduler")` as top-level ESM imports from
+///   `/@zerho/deps/<spec>` so the browser shares a single singleton instance across packages.
+/// - Emits real ESM named exports (`export const createRoot = __zerho_cjs_entry.createRoot;`) alongside `export default`.
+pub fn prebundle_cjs_for_dev(
+    entry_path: &Path,
+    entry_source: &str,
+    mut resolve_and_read: impl FnMut(&str, &Path) -> Option<(PathBuf, String)>,
+) -> ZerhoResult<String> {
+    let mut modules: BTreeMap<String, String> = BTreeMap::new();
+    let mut visited: HashSet<PathBuf> = HashSet::new();
+    let mut queue: Vec<(PathBuf, String)> =
+        vec![(entry_path.to_path_buf(), entry_source.to_owned())];
+    let mut external_bare: BTreeMap<String, String> = BTreeMap::new();
+    let mut export_names: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+
+    let entry_key = normalize_cjs_key(entry_path);
+
+    while let Some((current_path, current_src)) = queue.pop() {
+        if !visited.insert(current_path.clone()) {
+            continue;
+        }
+        collect_static_cjs_export_names(&current_src, &mut export_names);
+
+        let mut local_map: BTreeMap<String, String> = BTreeMap::new();
+        let rewritten = rewrite_cjs_requires_for_env(&current_src, &current_path, false, |spec| {
+            if is_bare_cjs_specifier(spec) {
+                let next_idx = external_bare.len();
+                let alias = external_bare
+                    .entry(spec.to_owned())
+                    .or_insert_with(|| format!("__zerho_ext_{next_idx}"))
+                    .clone();
+                let _ = alias;
+                return Some(format!("__ext__:{spec}"));
+            }
+            if let Some(existing) = local_map.get(spec) {
+                return Some(existing.clone());
+            }
+            if let Some((target_path, target_src)) = resolve_and_read(spec, &current_path) {
+                let target_key = normalize_cjs_key(&target_path);
+                local_map.insert(spec.to_owned(), target_key.clone());
+                if !visited.contains(&target_path) {
+                    queue.push((target_path, target_src));
+                }
+                Some(target_key)
+            } else {
+                None
+            }
+        })?;
+        modules.insert(normalize_cjs_key(&current_path), rewritten);
+    }
+
+    let mut out = String::new();
+    for (spec, alias) in &external_bare {
+        out.push_str("import ");
+        out.push_str(alias);
+        out.push_str(" from \"/@zerho/deps/");
+        out.push_str(spec);
+        out.push_str("\";\n");
+    }
+    out.push_str("const __zerho_ext_map = {\n");
+    for (spec, alias) in &external_bare {
+        out.push_str("  \"__ext__:");
+        out.push_str(spec);
+        out.push_str("\": ");
+        out.push_str(alias);
+        out.push_str(",\n");
+    }
+    out.push_str("};\nconst __zerho_cjs_registry = {\n");
+    for (id, body) in &modules {
+        let escaped_id = id.replace('\\', "\\\\").replace('"', "\\\"");
+        out.push_str("  \"");
+        out.push_str(&escaped_id);
+        out.push_str("\": function(require, module, exports) {\n");
+        out.push_str(body);
+        out.push_str("\n  },\n");
+    }
+    let escaped_entry = entry_key.replace('\\', "\\\\").replace('"', "\\\"");
+    out.push_str(
+        "};\n\
+         const __zerho_cjs_cache = {};\n\
+         function __zerho_cjs_require(id) {\n\
+           if (id in __zerho_ext_map) return __zerho_ext_map[id];\n\
+           if (__zerho_cjs_cache[id]) return __zerho_cjs_cache[id].exports;\n\
+           const factory = __zerho_cjs_registry[id];\n\
+           if (!factory) throw new Error(\"[zerho cjs] unresolved require: \" + id);\n\
+           const mod = { exports: {} };\n\
+           __zerho_cjs_cache[id] = mod;\n\
+           factory(__zerho_cjs_require, mod, mod.exports);\n\
+           return mod.exports;\n\
+         }\n\
+         const __zerho_cjs_entry = __zerho_cjs_require(\"",
+    );
+    out.push_str(&escaped_entry);
+    out.push_str("\");\nexport default __zerho_cjs_entry;\n");
+    for name in export_names {
+        out.push_str("export const ");
+        out.push_str(&name);
+        out.push_str(" = __zerho_cjs_entry?.");
+        out.push_str(&name);
+        out.push_str(";\n");
+    }
+    Ok(out)
 }
 
 #[cfg(test)]

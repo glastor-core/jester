@@ -1,9 +1,17 @@
+mod assemble;
 pub mod check;
+mod html;
 pub mod images;
 pub mod security;
 pub mod stats;
+mod targets;
 
+use assemble::{
+    assemble_async_esm_chunk, assemble_js_bundle, assemble_shared_esm_chunk, build_hoist_inputs,
+    emit_post_order, is_side_effect_free, shake_modules,
+};
 pub use check::{CheckIssue, CheckReport, CheckSeverity, run_project_check};
+use html::{copy_dir_recursive, emit_css_bundle, is_css_module_path, rewrite_html_for_production};
 use rayon::prelude::*;
 use security::{
     build_csp_manifest, compress_brotli, compute_gzip_size, compute_sri_sha384, enforce_budgets,
@@ -18,14 +26,13 @@ use zerho_config::{SourceMapMode, ZerhoConfig, build_import_meta_env_json, load_
 use zerho_core::{ContentHash, ModuleId, ModuleKind, ZerhoError, ZerhoResult};
 use zerho_graph::{CachedArtifact, DiskCache, ModuleGraph};
 use zerho_plugin::{DefinePlugin, PluginRegistry, register_wasm_plugins};
-use zerho_resolver::{OxcResolver, Resolver};
+use zerho_resolver::{AssetQuery, OxcResolver, Resolver};
 use zerho_transform::{
-    HoistedModuleInput, ImportedSymbols, TransformInput, TransformPipeline,
-    collect_dynamic_imports, collect_imported_symbols, collect_web_worker_urls, encode_base64,
-    finalize_js_bundle_with_map, inline_css_imports, is_likely_commonjs, lower_esm_for_bundle,
-    optimize_svg, parse_pure_barrel, prebundle_cjs_graph_to_esm, prune_unused_exports,
-    rewrite_barrel_imports, rewrite_css_urls, rewrite_dynamic_imports, rewrite_web_worker_urls,
-    serialize_css_exports_json, try_scope_hoist_bundle, wrap_cjs_as_esm,
+    ImportedSymbols, TransformInput, TransformPipeline, collect_dynamic_imports,
+    collect_imported_symbols, collect_web_worker_urls, encode_base64, finalize_js_bundle_with_map,
+    inline_css_imports, is_likely_commonjs, lower_esm_for_bundle, optimize_svg,
+    parse_barrel_exports, rewrite_barrel_imports, rewrite_cjs_requires_for_env, rewrite_css_urls,
+    rewrite_dynamic_imports, rewrite_web_worker_urls, try_scope_hoist_bundle, wrap_cjs_as_esm,
 };
 
 /// Emitted production chunk metadata (including gzip/brotli sizes and optional SHA-384 SRI digest).
@@ -56,14 +63,14 @@ pub struct BundleOutput {
 }
 
 #[derive(Debug, Clone)]
-struct CollectedModule {
-    id: String,
-    canonical: PathBuf,
-    kind: ModuleKind,
-    code: String,
-    css_exports: Option<BTreeMap<String, String>>,
-    emitted_asset_url: Option<String>,
-    resolved_imports: BTreeMap<String, Option<String>>,
+pub(crate) struct CollectedModule {
+    pub(crate) id: String,
+    pub(crate) canonical: PathBuf,
+    pub(crate) kind: ModuleKind,
+    pub(crate) code: String,
+    pub(crate) css_exports: Option<BTreeMap<String, String>>,
+    pub(crate) emitted_asset_url: Option<String>,
+    pub(crate) resolved_imports: BTreeMap<String, Option<String>>,
 }
 
 #[derive(Debug)]
@@ -77,6 +84,7 @@ struct LoadedNode {
     worker_deps: Vec<PathBuf>,
     imported_symbols: Vec<(PathBuf, ImportedSymbols)>,
     asset_chunks: Vec<Chunk>,
+    synthetic_modules: Vec<CollectedModule>,
     barrel_bypassed: usize,
 }
 
@@ -117,9 +125,13 @@ impl Bundler {
             env_json.pop();
             env_json.push_str(",\"SSR\":true}");
         }
-        let env_hash = ContentHash::from_bytes(env_json.as_bytes());
+        let env_hash = ContentHash::from_bytes(format!("{env_json}:production").as_bytes());
         let mut defines = BTreeMap::new();
         defines.insert("import.meta.env".to_owned(), env_json);
+        defines.insert(
+            "process.env.NODE_ENV".to_owned(),
+            "\"production\"".to_owned(),
+        );
         let mut registry = PluginRegistry::new();
         registry.register(DefinePlugin::new(defines));
 
@@ -191,16 +203,7 @@ impl Bundler {
             reason: format!("entry file not found: {err}"),
         })?;
 
-        let out_dir = if self.config.build.out_dir.is_absolute() {
-            self.config.build.out_dir.clone()
-        } else {
-            self.root.join(&self.config.build.out_dir)
-        };
-        let assets_dir = out_dir.join("assets");
-        fs::create_dir_all(&assets_dir).map_err(|err| ZerhoError::Io {
-            path: Some(assets_dir.clone()),
-            reason: err.to_string(),
-        })?;
+        let out_dir = self.prepare_out_dir()?;
 
         let mut collected = Vec::new();
         let mut dynamic_targets: Vec<PathBuf> = Vec::new();
@@ -351,7 +354,27 @@ impl Bundler {
         })
     }
 
-    fn lower_esm_modules(&self, collected: &mut [CollectedModule]) -> ZerhoResult<()> {
+    pub(crate) fn prepare_out_dir(&self) -> ZerhoResult<PathBuf> {
+        let out_dir = if self.config.build.out_dir.is_absolute() {
+            self.config.build.out_dir.clone()
+        } else {
+            self.root.join(&self.config.build.out_dir)
+        };
+        if self.config.build.empty_out_dir && out_dir.exists() && out_dir != self.root {
+            fs::remove_dir_all(&out_dir).map_err(|err| ZerhoError::Io {
+                path: Some(out_dir.clone()),
+                reason: format!("failed to empty out_dir before build: {err}"),
+            })?;
+        }
+        let assets_dir = out_dir.join("assets");
+        fs::create_dir_all(&assets_dir).map_err(|err| ZerhoError::Io {
+            path: Some(assets_dir),
+            reason: err.to_string(),
+        })?;
+        Ok(out_dir)
+    }
+
+    pub(crate) fn lower_esm_modules(&self, collected: &mut [CollectedModule]) -> ZerhoResult<()> {
         collected
             .par_iter_mut()
             .try_for_each(|module| -> ZerhoResult<()> {
@@ -453,7 +476,7 @@ impl Bundler {
             }
             let raw_shared = assemble_shared_esm_chunk(&shared_modules);
             let emitted = self.emit_js_chunk(out_dir, "shared", &raw_shared)?;
-            let url = format!("/{}", emitted.file_name);
+            let url = self.config.build.asset_url(&emitted.file_name);
             preload_chunks.push((emitted.file_name.clone(), emitted.integrity.clone()));
             split_chunk_files.push(emitted.file_name.clone());
             chunks.push(emitted);
@@ -478,7 +501,7 @@ impl Bundler {
                 },
             );
             let emitted = self.emit_js_chunk(out_dir, "chunk", &raw_chunk)?;
-            dynamic_url_map.insert(target, format!("/{}", emitted.file_name));
+            dynamic_url_map.insert(target, self.config.build.asset_url(&emitted.file_name));
             split_chunk_files.push(emitted.file_name.clone());
             chunks.push(emitted);
         }
@@ -524,7 +547,7 @@ impl Bundler {
             let target_id = self.module_key(&target);
             let raw_worker = assemble_js_bundle(&worker_mods, &target_id);
             let emitted = self.emit_js_chunk(out_dir, "worker", &raw_worker)?;
-            worker_url_map.insert(target, format!("/{}", emitted.file_name));
+            worker_url_map.insert(target, self.config.build.asset_url(&emitted.file_name));
             chunks.push(emitted);
         }
         Ok(worker_url_map)
@@ -550,9 +573,11 @@ impl Bundler {
                 path: Some(src_html),
                 reason: err.to_string(),
             })?;
+            let base = self.config.build.normalized_base();
             let prod_html = rewrite_html_for_production(
                 &html,
                 &self.config.project.entry,
+                &base,
                 js_file,
                 js_sri,
                 css_file,
@@ -600,7 +625,12 @@ impl Bundler {
         })
     }
 
-    fn emit_js_chunk(&self, out_dir: &Path, prefix: &str, raw_js: &str) -> ZerhoResult<Chunk> {
+    pub(crate) fn emit_js_chunk(
+        &self,
+        out_dir: &Path,
+        prefix: &str,
+        raw_js: &str,
+    ) -> ZerhoResult<Chunk> {
         let emit_map = self.config.build.sourcemap != SourceMapMode::None;
         let (mut final_js, map_json) = finalize_js_bundle_with_map(
             raw_js,
@@ -696,7 +726,7 @@ impl Bundler {
     /// backed by incremental `redb` + remote team cache, then emits modules in deterministic
     /// post-order DFS.
     #[allow(clippy::too_many_arguments)]
-    fn collect_module_graph(
+    pub(crate) fn collect_module_graph(
         &mut self,
         entry: &Path,
         out_dir: &Path,
@@ -712,6 +742,7 @@ impl Bundler {
         discovered.insert(entry_canon.clone());
 
         let mut loaded_map: HashMap<PathBuf, (CollectedModule, Vec<PathBuf>)> = HashMap::new();
+        let mut synthetic_seen: HashSet<String> = HashSet::new();
         let mut total_barrel_bypassed = 0usize;
 
         while !frontier.is_empty() {
@@ -724,6 +755,11 @@ impl Bundler {
             for node in batch {
                 total_barrel_bypassed += node.barrel_bypassed;
                 asset_chunks.extend(node.asset_chunks);
+                for syn in node.synthetic_modules {
+                    if synthetic_seen.insert(syn.id.clone()) {
+                        collected.push(syn);
+                    }
+                }
                 if let Some(hash) = node.hash {
                     let mod_id = ModuleId::from_specifier(&node.canonical.to_string_lossy());
                     self.graph.upsert_module(
@@ -776,6 +812,7 @@ impl Bundler {
                 worker_deps: Vec::new(),
                 imported_symbols: Vec::new(),
                 asset_chunks: vec![chunk],
+                synthetic_modules: Vec::new(),
                 barrel_bypassed: 0,
             });
         }
@@ -786,19 +823,34 @@ impl Bundler {
         })?;
 
         let mut extra_asset_chunks = Vec::new();
+        let mut cjs_dep_paths: Vec<PathBuf> = Vec::new();
 
-        // Deep CJS -> ESM pre-bundling (resolving nested require()) and CSS @import + url(...) rewriting.
+        // Shared-registry CommonJS -> ESM wrapping (preserving singleton instances across
+        // packages like react / react-dom / scheduler) and CSS @import + url(...) rewriting.
         let source = if kind == ModuleKind::Js && is_likely_commonjs(&raw_source) {
-            prebundle_cjs_graph_to_esm(canonical, &raw_source, |spec, importer| {
-                let dep = self.resolver.resolve(spec, Some(importer)).ok()?;
-                if dep.is_virtual {
-                    return None;
-                }
-                let dep_canon = dep.path.canonicalize().unwrap_or(dep.path);
-                let src = fs::read_to_string(&dep_canon).ok()?;
-                Some((dep_canon, src))
-            })
-            .unwrap_or_else(|_| wrap_cjs_as_esm(&raw_source))
+            if let Ok(rewritten) =
+                rewrite_cjs_requires_for_env(&raw_source, canonical, true, |spec| {
+                    let dep = self.resolver.resolve(spec, Some(canonical)).ok()?;
+                    if dep.is_virtual {
+                        return None;
+                    }
+                    let dep_canon = dep.path.canonicalize().unwrap_or(dep.path);
+                    let key = self.module_key(&dep_canon);
+                    cjs_dep_paths.push(dep_canon);
+                    Some(key)
+                })
+            {
+                format!(
+                    "const __zerho_cjs_module = {{ exports: {{}} }};\n\
+                     (function(require, module, exports) {{\n\
+                     {rewritten}\n\
+                     }})((id) => {{ const m = __zerho_require(id); return m && typeof m === \"object\" && \"default\" in m ? m.default : m; }}, __zerho_cjs_module, __zerho_cjs_module.exports);\n\
+                     const __zerho_cjs_entry = __zerho_cjs_module.exports;\n\
+                     export default __zerho_cjs_entry;\n"
+                )
+            } else {
+                wrap_cjs_as_esm(&raw_source)
+            }
         } else if kind == ModuleKind::Css {
             let inlined = inline_css_imports(&raw_source, canonical, |spec, importer| {
                 let dep = self.resolver.resolve(spec, Some(importer)).ok()?;
@@ -898,7 +950,11 @@ impl Bundler {
                             let barrel_canon =
                                 resolved.path.canonicalize().unwrap_or(resolved.path);
                             let src = fs::read_to_string(&barrel_canon).ok()?;
-                            let map = parse_pure_barrel(&src, &barrel_canon)?;
+                            let map = parse_barrel_exports(
+                                &src,
+                                &barrel_canon,
+                                is_side_effect_free(&barrel_canon),
+                            )?;
                             Some((barrel_canon, map))
                         });
                     let (barrel_canon, map) = entry.as_ref()?;
@@ -966,18 +1022,59 @@ impl Bundler {
         let mut dep_paths = Vec::new();
         let mut dep_ids = Vec::new();
         let mut resolved_imports = BTreeMap::new();
+        let mut synthetic_modules = Vec::new();
+        for cjs_dep in cjs_dep_paths {
+            dep_ids.push(ModuleId::from_specifier(&cjs_dep.to_string_lossy()));
+            imported_symbols.push((cjs_dep.clone(), ImportedSymbols::All));
+            dep_paths.push(cjs_dep);
+        }
         for spec in &imports {
             if let Ok(resolved) = self.resolver.resolve(spec, Some(canonical)) {
                 if resolved.is_virtual {
                     resolved_imports.insert(spec.clone(), None);
                 } else {
                     let dep_canon = resolved.path.canonicalize().unwrap_or(resolved.path);
-                    dep_ids.push(ModuleId::from_specifier(&dep_canon.to_string_lossy()));
-                    dep_paths.push(dep_canon.clone());
-                    if resolved.kind == ModuleKind::Css && !is_css_module_path(&dep_canon) {
-                        resolved_imports.insert(spec.clone(), None);
-                    } else {
-                        resolved_imports.insert(spec.clone(), Some(self.module_key(&dep_canon)));
+                    match resolved.query {
+                        AssetQuery::Raw => {
+                            let raw_text =
+                                fs::read_to_string(&dep_canon).map_err(|err| ZerhoError::Io {
+                                    path: Some(dep_canon.clone()),
+                                    reason: err.to_string(),
+                                })?;
+                            let raw_id = format!("{}?raw", self.module_key(&dep_canon));
+                            synthetic_modules.push(CollectedModule {
+                                id: raw_id.clone(),
+                                canonical: dep_canon,
+                                kind: ModuleKind::Json,
+                                code: format!(
+                                    "export default \"{}\";\n",
+                                    escape_js_string_literal(&raw_text)
+                                ),
+                                css_exports: None,
+                                emitted_asset_url: None,
+                                resolved_imports: BTreeMap::new(),
+                            });
+                            resolved_imports.insert(spec.clone(), Some(raw_id));
+                        }
+                        AssetQuery::Url => {
+                            let (mut asset_mod, asset_chunk) =
+                                self.emit_imported_asset(&dep_canon, out_dir)?;
+                            let url_id = format!("{}?url", self.module_key(&dep_canon));
+                            asset_mod.id.clone_from(&url_id);
+                            extra_asset_chunks.push(asset_chunk);
+                            synthetic_modules.push(asset_mod);
+                            resolved_imports.insert(spec.clone(), Some(url_id));
+                        }
+                        AssetQuery::None => {
+                            dep_ids.push(ModuleId::from_specifier(&dep_canon.to_string_lossy()));
+                            dep_paths.push(dep_canon.clone());
+                            if resolved.kind == ModuleKind::Css && !is_css_module_path(&dep_canon) {
+                                resolved_imports.insert(spec.clone(), None);
+                            } else {
+                                resolved_imports
+                                    .insert(spec.clone(), Some(self.module_key(&dep_canon)));
+                            }
+                        }
                     }
                 }
             }
@@ -1002,6 +1099,7 @@ impl Bundler {
             worker_deps,
             imported_symbols,
             asset_chunks: extra_asset_chunks,
+            synthetic_modules,
             barrel_bypassed,
         })
     }
@@ -1063,418 +1161,13 @@ impl Bundler {
             kind: ModuleKind::Asset,
             code: String::new(),
             css_exports: None,
-            emitted_asset_url: Some(format!("/{file_name}")),
+            emitted_asset_url: Some(self.config.build.asset_url(&file_name)),
             resolved_imports: BTreeMap::new(),
         };
         Ok((module, chunk))
     }
 
-    /// Builds a DOM-free Edge/Server ESM bundle (`dist/server.mjs`) targeting Cloudflare Workers,
-    /// Deno, Node.js, and Bun (`import.meta.env.SSR = true`, no `index.html` emitted).
-    fn build_ssr(&mut self) -> ZerhoResult<BundleOutput> {
-        let entry_path = self.root.join(&self.config.project.entry);
-        let entry_canon = entry_path.canonicalize().map_err(|err| ZerhoError::Io {
-            path: Some(entry_path),
-            reason: format!("SSR entry file not found: {err}"),
-        })?;
-
-        let out_dir = if self.config.build.out_dir.is_absolute() {
-            self.config.build.out_dir.clone()
-        } else {
-            self.root.join(&self.config.build.out_dir)
-        };
-        fs::create_dir_all(out_dir.join("assets")).map_err(|err| ZerhoError::Io {
-            path: Some(out_dir.join("assets")),
-            reason: err.to_string(),
-        })?;
-
-        let mut collected = Vec::new();
-        let mut dynamic_targets = Vec::new();
-        let mut worker_targets = Vec::new();
-        let mut usage_map = HashMap::new();
-        let mut asset_chunks = Vec::new();
-        usage_map.insert(entry_canon.clone(), ImportedSymbols::All);
-
-        let barrel_imports_bypassed = self.collect_module_graph(
-            &entry_canon,
-            &out_dir,
-            &mut collected,
-            &mut dynamic_targets,
-            &mut worker_targets,
-            &mut usage_map,
-            &mut asset_chunks,
-        )?;
-        let tree_shaken_exports = shake_modules(&mut collected, &usage_map)?;
-        self.lower_esm_modules(&mut collected)?;
-
-        let entry_id = self.module_key(&entry_canon);
-        let raw_ssr = assemble_library_bundle(&collected, &entry_id, true);
-        let ssr_chunk = self.emit_named_js_file(&out_dir, "server.mjs", &raw_ssr)?;
-
-        let manifest = format!(
-            "{{\n  \"mode\": \"ssr\",\n  \"entry\": \"{}\",\n  \"file\": \"server.mjs\",\n  \"modules\": {},\n  \"tree_shaken_exports\": {tree_shaken_exports}\n}}\n",
-            self.config
-                .project
-                .entry
-                .to_string_lossy()
-                .replace('\\', "/"),
-            collected.len()
-        );
-        let manifest_path = out_dir.join("manifest.json");
-        fs::write(&manifest_path, manifest).map_err(|err| ZerhoError::Io {
-            path: Some(manifest_path),
-            reason: err.to_string(),
-        })?;
-
-        let mut chunks = vec![ssr_chunk];
-        chunks.extend(asset_chunks);
-        let cache_stats = self.cache.stats();
-        Ok(BundleOutput {
-            out_dir,
-            chunks,
-            module_count: collected.len(),
-            tree_shaken_exports,
-            barrel_imports_bypassed,
-            cache_hits: cache_stats.hits,
-            cache_misses: cache_stats.misses,
-            scope_hoisted: false,
-            stats_file: None,
-        })
-    }
-
-    #[allow(clippy::too_many_lines)]
-    fn build_mpa(&mut self) -> ZerhoResult<BundleOutput> {
-        let out_dir = if self.config.build.out_dir.is_absolute() {
-            self.config.build.out_dir.clone()
-        } else {
-            self.root.join(&self.config.build.out_dir)
-        };
-        fs::create_dir_all(out_dir.join("assets")).map_err(|err| ZerhoError::Io {
-            path: Some(out_dir.join("assets")),
-            reason: err.to_string(),
-        })?;
-
-        let entries: Vec<(String, PathBuf)> = self
-            .config
-            .build
-            .entries
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-
-        let mut pending: Vec<(String, PathBuf, PathBuf, Vec<CollectedModule>)> = Vec::new();
-        let mut chunks = Vec::new();
-        let mut total_shaken = 0usize;
-        let mut total_barrels = 0usize;
-        let mut unique_modules = HashSet::new();
-
-        for (name, rel_entry) in entries {
-            let entry_path = self.root.join(&rel_entry);
-            let entry_canon = entry_path.canonicalize().map_err(|err| ZerhoError::Io {
-                path: Some(entry_path),
-                reason: format!("MPA entry `{name}` not found: {err}"),
-            })?;
-
-            let mut collected = Vec::new();
-            let mut dynamic_targets = Vec::new();
-            let mut worker_targets = Vec::new();
-            let mut usage_map = HashMap::new();
-            let mut asset_chunks = Vec::new();
-            usage_map.insert(entry_canon.clone(), ImportedSymbols::All);
-
-            total_barrels += self.collect_module_graph(
-                &entry_canon,
-                &out_dir,
-                &mut collected,
-                &mut dynamic_targets,
-                &mut worker_targets,
-                &mut usage_map,
-                &mut asset_chunks,
-            )?;
-            total_shaken += shake_modules(&mut collected, &usage_map)?;
-            self.lower_esm_modules(&mut collected)?;
-            for m in &collected {
-                unique_modules.insert(m.id.clone());
-            }
-            chunks.extend(asset_chunks);
-            pending.push((name, rel_entry, entry_canon, collected));
-        }
-
-        // Deduplicate modules shared across >= 2 MPA entry points into `assets/shared-<hash>.js`.
-        let mut id_counts: HashMap<String, usize> = HashMap::new();
-        for (_, _, _, mods) in &pending {
-            let mut seen = HashSet::new();
-            for m in mods {
-                if (m.kind.is_script() || m.kind == ModuleKind::Json || m.css_exports.is_some())
-                    && seen.insert(m.id.clone())
-                {
-                    *id_counts.entry(m.id.clone()).or_insert(0) += 1;
-                }
-            }
-        }
-        let shared_ids: HashSet<String> = id_counts
-            .into_iter()
-            .filter_map(|(id, count)| (count >= 2).then_some(id))
-            .collect();
-
-        let mut preload_chunks = Vec::new();
-        let shared_url = if shared_ids.is_empty() {
-            None
-        } else {
-            let mut shared_mods = Vec::new();
-            let mut seen = HashSet::new();
-            for (_, _, _, mods) in &pending {
-                for m in mods {
-                    if shared_ids.contains(&m.id) && seen.insert(m.id.clone()) {
-                        shared_mods.push(m.clone());
-                    }
-                }
-            }
-            let raw_shared = assemble_shared_esm_chunk(&shared_mods);
-            let emitted = self.emit_js_chunk(&out_dir, "shared", &raw_shared)?;
-            let url = format!("/{}", emitted.file_name);
-            preload_chunks.push((emitted.file_name.clone(), emitted.integrity.clone()));
-            chunks.push(emitted);
-            Some(url)
-        };
-
-        let mut manifest_entries = Vec::new();
-        for (name, rel_entry, entry_canon, mut mods) in pending {
-            let uses_shared =
-                shared_url.is_some() && mods.iter().any(|m| shared_ids.contains(&m.id));
-            if uses_shared {
-                mods.retain(|m| !shared_ids.contains(&m.id));
-            }
-            let entry_id = self.module_key(&entry_canon);
-            let raw_js = if uses_shared {
-                assemble_async_esm_chunk(&mods, &entry_id, shared_url.as_deref())
-            } else {
-                assemble_js_bundle(&mods, &entry_id)
-            };
-            let js_chunk = self.emit_js_chunk(&out_dir, &name, &raw_js)?;
-            let css_emit = emit_css_bundle(
-                &out_dir,
-                &mods,
-                self.config.security.sri,
-                self.config.build.brotli,
-                &mut chunks,
-            )?;
-
-            let html_name = format!("{name}.html");
-            let src_html = self.root.join(&html_name);
-            let base_html = if src_html.is_file() {
-                fs::read_to_string(&src_html).map_err(|err| ZerhoError::Io {
-                    path: Some(src_html),
-                    reason: err.to_string(),
-                })?
-            } else {
-                format!(
-                    "<!doctype html><html><head><meta charset=\"utf-8\" /><title>{name}</title></head><body><div id=\"app\"></div><script type=\"module\" src=\"/{}\"></script></body></html>\n",
-                    rel_entry.to_string_lossy().replace('\\', "/")
-                )
-            };
-            let prod_html = rewrite_html_for_production(
-                &base_html,
-                &rel_entry,
-                &js_chunk.file_name,
-                js_chunk.integrity.as_deref(),
-                css_emit.as_ref().map(|(f, _)| f.as_str()),
-                css_emit.as_ref().and_then(|(_, sri)| sri.as_deref()),
-                if uses_shared { &preload_chunks } else { &[] },
-            );
-            let out_html = out_dir.join(&html_name);
-            fs::write(&out_html, prod_html).map_err(|err| ZerhoError::Io {
-                path: Some(out_html),
-                reason: err.to_string(),
-            })?;
-
-            manifest_entries.push(format!("  \"{name}\": \"{}\"", js_chunk.file_name));
-            chunks.push(js_chunk);
-        }
-
-        enforce_budgets(&chunks, &self.config.build.budgets)?;
-        if self.config.security.csp {
-            let csp_path = out_dir.join("csp.json");
-            fs::write(&csp_path, build_csp_manifest(&chunks)).map_err(|err| ZerhoError::Io {
-                path: Some(csp_path),
-                reason: err.to_string(),
-            })?;
-        }
-        let manifest = format!(
-            "{{\n  \"mode\": \"mpa\",\n  \"entries\": {{\n{}\n  }}\n}}\n",
-            manifest_entries.join(",\n")
-        );
-        let manifest_path = out_dir.join("manifest.json");
-        fs::write(&manifest_path, manifest).map_err(|err| ZerhoError::Io {
-            path: Some(manifest_path),
-            reason: err.to_string(),
-        })?;
-
-        let cache_stats = self.cache.stats();
-        Ok(BundleOutput {
-            out_dir,
-            chunks,
-            module_count: unique_modules.len(),
-            tree_shaken_exports: total_shaken,
-            barrel_imports_bypassed: total_barrels,
-            cache_hits: cache_stats.hits,
-            cache_misses: cache_stats.misses,
-            scope_hoisted: false,
-            stats_file: None,
-        })
-    }
-
-    fn build_library(&mut self, lib_entry: &Path) -> ZerhoResult<BundleOutput> {
-        let entry_path = self.root.join(lib_entry);
-        let entry_canon = entry_path.canonicalize().map_err(|err| ZerhoError::Io {
-            path: Some(entry_path),
-            reason: format!("library entry file not found: {err}"),
-        })?;
-
-        let out_dir = if self.config.build.out_dir.is_absolute() {
-            self.config.build.out_dir.clone()
-        } else {
-            self.root.join(&self.config.build.out_dir)
-        };
-        fs::create_dir_all(&out_dir).map_err(|err| ZerhoError::Io {
-            path: Some(out_dir.clone()),
-            reason: err.to_string(),
-        })?;
-        fs::create_dir_all(out_dir.join("assets")).map_err(|err| ZerhoError::Io {
-            path: Some(out_dir.join("assets")),
-            reason: err.to_string(),
-        })?;
-
-        let mut collected = Vec::new();
-        let mut dynamic_targets = Vec::new();
-        let mut worker_targets = Vec::new();
-        let mut usage_map = HashMap::new();
-        let mut asset_chunks = Vec::new();
-        usage_map.insert(entry_canon.clone(), ImportedSymbols::All);
-
-        let barrel_imports_bypassed = self.collect_module_graph(
-            &entry_canon,
-            &out_dir,
-            &mut collected,
-            &mut dynamic_targets,
-            &mut worker_targets,
-            &mut usage_map,
-            &mut asset_chunks,
-        )?;
-        let tree_shaken_exports = shake_modules(&mut collected, &usage_map)?;
-        self.lower_esm_modules(&mut collected)?;
-
-        let entry_id = self.module_key(&entry_canon);
-        let lib_name = self
-            .config
-            .build
-            .lib
-            .name
-            .clone()
-            .unwrap_or_else(|| self.config.project.name.clone());
-
-        let mut chunks = Vec::new();
-        for fmt in &self.config.build.lib.formats {
-            let (file_name, raw_code) = match fmt.as_str() {
-                "es" | "esm" => (
-                    format!("{lib_name}.mjs"),
-                    assemble_library_bundle(&collected, &entry_id, true),
-                ),
-                "cjs" => (
-                    format!("{lib_name}.cjs"),
-                    assemble_library_bundle(&collected, &entry_id, false),
-                ),
-                other => {
-                    return Err(ZerhoError::Config(format!(
-                        "unsupported `build.lib.formats` value `{other}` (expected: es, cjs)"
-                    )));
-                }
-            };
-            let chunk = self.emit_named_js_file(&out_dir, &file_name, &raw_code)?;
-            chunks.push(chunk);
-        }
-        chunks.extend(asset_chunks);
-
-        enforce_budgets(&chunks, &self.config.build.budgets)?;
-        let cache_stats = self.cache.stats();
-        Ok(BundleOutput {
-            out_dir,
-            chunks,
-            module_count: collected.len(),
-            tree_shaken_exports,
-            barrel_imports_bypassed,
-            cache_hits: cache_stats.hits,
-            cache_misses: cache_stats.misses,
-            scope_hoisted: false,
-            stats_file: None,
-        })
-    }
-
-    fn emit_named_js_file(
-        &self,
-        out_dir: &Path,
-        file_name: &str,
-        raw_js: &str,
-    ) -> ZerhoResult<Chunk> {
-        let emit_map = self.config.build.sourcemap != SourceMapMode::None;
-        let (mut final_js, map_json) =
-            finalize_js_bundle_with_map(raw_js, file_name, self.config.build.minify, emit_map)?;
-        let hash = ContentHash::from_bytes(final_js.as_bytes());
-        let mut sourcemap_file = None;
-        if let Some(map) = map_json
-            && self.config.build.sourcemap == SourceMapMode::Linked
-        {
-            let map_file = format!("{file_name}.map");
-            let map_path = out_dir.join(&map_file);
-            fs::write(&map_path, map).map_err(|err| ZerhoError::Io {
-                path: Some(map_path),
-                reason: err.to_string(),
-            })?;
-            let _ = write!(final_js, "\n//# sourceMappingURL={map_file}\n");
-            sourcemap_file = Some(map_file);
-        }
-        if self.config.security.secret_scan {
-            scan_for_leaked_secrets(file_name, &final_js)?;
-        }
-        let integrity = self
-            .config
-            .security
-            .sri
-            .then(|| compute_sri_sha384(final_js.as_bytes()));
-        let gzip_bytes = compute_gzip_size(final_js.as_bytes());
-        let br_buf = compress_brotli(final_js.as_bytes());
-        let brotli_bytes = br_buf.len();
-
-        let js_path = out_dir.join(file_name);
-        fs::write(&js_path, &final_js).map_err(|err| ZerhoError::Io {
-            path: Some(js_path),
-            reason: err.to_string(),
-        })?;
-        let brotli_file = if self.config.build.brotli {
-            let br_name = format!("{file_name}.br");
-            let br_path = out_dir.join(&br_name);
-            fs::write(&br_path, &br_buf).map_err(|err| ZerhoError::Io {
-                path: Some(br_path),
-                reason: err.to_string(),
-            })?;
-            Some(br_name)
-        } else {
-            None
-        };
-
-        Ok(Chunk {
-            file_name: file_name.to_owned(),
-            hash,
-            bytes: final_js.len(),
-            gzip_bytes,
-            brotli_bytes,
-            brotli_file,
-            sourcemap_file,
-            integrity,
-        })
-    }
-
-    fn module_key(&self, canonical: &Path) -> String {
+    pub(crate) fn module_key(&self, canonical: &Path) -> String {
         canonical.strip_prefix(&self.root).map_or_else(
             |_| canonical.to_string_lossy().replace('\\', "/"),
             |rel| rel.to_string_lossy().replace('\\', "/"),
@@ -1482,378 +1175,16 @@ impl Bundler {
     }
 }
 
-fn shake_modules(
-    collected: &mut [CollectedModule],
-    usage_map: &HashMap<PathBuf, ImportedSymbols>,
-) -> ZerhoResult<usize> {
-    let counts = collected
-        .par_iter_mut()
-        .map(|module| -> ZerhoResult<usize> {
-            if !module.kind.is_script() {
-                return Ok(0);
-            }
-            let used = usage_map
-                .get(&module.canonical)
-                .unwrap_or(&ImportedSymbols::All);
-            let shaken = prune_unused_exports(&module.code, &module.canonical, used)?;
-            module.code = shaken.code;
-            Ok(shaken.removed_exports.len())
-        })
-        .collect::<ZerhoResult<Vec<usize>>>()?;
-    Ok(counts.into_iter().sum())
-}
-
-fn build_hoist_inputs(collected: &[CollectedModule]) -> Vec<HoistedModuleInput> {
-    let mut out = Vec::with_capacity(collected.len());
-    for module in collected {
-        if module.kind.is_script() || module.kind == ModuleKind::Json {
-            out.push(HoistedModuleInput {
-                id: module.id.clone(),
-                code: module.code.clone(),
-                synthetic_default_expr: None,
-                resolved_imports: module.resolved_imports.clone(),
-            });
-        } else if let Some(exports) = &module.css_exports {
-            out.push(HoistedModuleInput {
-                id: module.id.clone(),
-                code: String::new(),
-                synthetic_default_expr: Some(serialize_css_exports_json(exports)),
-                resolved_imports: BTreeMap::new(),
-            });
-        } else if let Some(asset_url) = &module.emitted_asset_url {
-            let synthetic = if Path::new(asset_url)
-                .extension()
-                .is_some_and(|e| e.eq_ignore_ascii_case("wasm"))
-            {
-                format!(
-                    "async function(imports){{return WebAssembly.instantiateStreaming(fetch(\"{asset_url}\"),imports);}}"
-                )
-            } else {
-                format!("\"{asset_url}\"")
-            };
-            out.push(HoistedModuleInput {
-                id: module.id.clone(),
-                code: String::new(),
-                synthetic_default_expr: Some(synthetic),
-                resolved_imports: BTreeMap::new(),
-            });
-        }
-    }
-    out
-}
-
-fn emit_post_order(
-    path: &Path,
-    visited: &mut HashSet<PathBuf>,
-    loaded: &mut HashMap<PathBuf, (CollectedModule, Vec<PathBuf>)>,
-    out: &mut Vec<CollectedModule>,
-) {
-    if !visited.insert(path.to_path_buf()) {
-        return;
-    }
-    let Some((module, deps)) = loaded.remove(path) else {
-        return;
-    };
-    for dep in deps {
-        emit_post_order(&dep, visited, loaded, out);
-    }
-    out.push(module);
-}
-
-fn copy_dir_recursive(src: &Path, dst: &Path, optimize_svgs: bool) -> ZerhoResult<()> {
-    fs::create_dir_all(dst).map_err(|err| ZerhoError::Io {
-        path: Some(dst.to_path_buf()),
-        reason: err.to_string(),
-    })?;
-    let entries = fs::read_dir(src).map_err(|err| ZerhoError::Io {
-        path: Some(src.to_path_buf()),
-        reason: err.to_string(),
-    })?;
-    for entry in entries {
-        let entry = entry.map_err(|err| ZerhoError::Io {
-            path: Some(src.to_path_buf()),
-            reason: err.to_string(),
-        })?;
-        let from = entry.path();
-        let to = dst.join(entry.file_name());
-        if from.is_dir() {
-            copy_dir_recursive(&from, &to, optimize_svgs)?;
-        } else if optimize_svgs
-            && from
-                .extension()
-                .is_some_and(|e| e.eq_ignore_ascii_case("svg"))
-            && let Ok(raw) = fs::read_to_string(&from)
-        {
-            fs::write(&to, optimize_svg(&raw)).map_err(|err| ZerhoError::Io {
-                path: Some(to),
-                reason: err.to_string(),
-            })?;
-        } else {
-            fs::copy(&from, &to).map_err(|err| ZerhoError::Io {
-                path: Some(to),
-                reason: err.to_string(),
-            })?;
-        }
-    }
-    Ok(())
-}
-
-fn emit_css_bundle(
-    out_dir: &Path,
-    collected: &[CollectedModule],
-    emit_sri: bool,
-    emit_brotli: bool,
-    chunks: &mut Vec<Chunk>,
-) -> ZerhoResult<Option<(String, Option<String>)>> {
-    let mut css_parts = Vec::new();
-    for module in collected {
-        if module.kind == ModuleKind::Css && !module.code.trim().is_empty() {
-            css_parts.push(module.code.as_str());
-        }
-    }
-    if css_parts.is_empty() {
-        return Ok(None);
-    }
-    let combined_css = css_parts.join("\n");
-    let css_hash = ContentHash::from_bytes(combined_css.as_bytes());
-    let file_name = format!("assets/index-{}.css", css_hash.short_hex());
-    let css_path = out_dir.join(&file_name);
-    fs::write(&css_path, &combined_css).map_err(|err| ZerhoError::Io {
-        path: Some(css_path),
-        reason: err.to_string(),
-    })?;
-    let integrity = emit_sri.then(|| compute_sri_sha384(combined_css.as_bytes()));
-    let gzip_bytes = compute_gzip_size(combined_css.as_bytes());
-    let br_buf = compress_brotli(combined_css.as_bytes());
-    let brotli_bytes = br_buf.len();
-    let brotli_file = if emit_brotli {
-        let br_name = format!("{file_name}.br");
-        let br_path = out_dir.join(&br_name);
-        fs::write(&br_path, &br_buf).map_err(|err| ZerhoError::Io {
-            path: Some(br_path),
-            reason: err.to_string(),
-        })?;
-        Some(br_name)
-    } else {
-        None
-    };
-    chunks.push(Chunk {
-        file_name: file_name.clone(),
-        hash: css_hash,
-        bytes: combined_css.len(),
-        gzip_bytes,
-        brotli_bytes,
-        brotli_file,
-        sourcemap_file: None,
-        integrity: integrity.clone(),
-    });
-    Ok(Some((file_name, integrity)))
-}
-
-fn is_css_module_path(path: &Path) -> bool {
-    path.file_name()
-        .and_then(|n| n.to_str())
-        .is_some_and(|name| name.ends_with(".module.css"))
-}
-
-fn push_module_factory(out: &mut String, module: &CollectedModule) {
-    if module.kind.is_script() || module.kind == ModuleKind::Json {
-        out.push_str("  \"");
-        out.push_str(&module.id);
-        out.push_str("\": function(__zerho_require, __zerho_exports) {\n");
-        out.push_str(&module.code);
-        out.push_str("\n  },\n");
-    } else if let Some(exports) = &module.css_exports {
-        let json = serialize_css_exports_json(exports);
-        out.push_str("  \"");
-        out.push_str(&module.id);
-        out.push_str(
-            "\": function(__zerho_require, __zerho_exports) {\n    __zerho_exports.default = ",
-        );
-        out.push_str(&json);
-        out.push_str(";\n  },\n");
-    } else if let Some(asset_url) = &module.emitted_asset_url {
-        out.push_str("  \"");
-        out.push_str(&module.id);
-        if Path::new(asset_url)
-            .extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case("wasm"))
-        {
-            out.push_str(
-                "\": function(__zerho_require, __zerho_exports) {\n    __zerho_exports.default = async function(imports) { return WebAssembly.instantiateStreaming(fetch(\"",
-            );
-            out.push_str(asset_url);
-            out.push_str("\"), imports); };\n  },\n");
-        } else {
-            out.push_str(
-                "\": function(__zerho_require, __zerho_exports) {\n    __zerho_exports.default = \"",
-            );
-            out.push_str(asset_url);
-            out.push_str("\";\n  },\n");
-        }
-    }
-}
-
-fn assemble_js_bundle(modules: &[CollectedModule], entry_id: &str) -> String {
-    let mut out = String::from(
-        "(function(){\n\
-         const __zerho_registry = {\n",
-    );
-
-    for module in modules {
-        push_module_factory(&mut out, module);
-    }
-
-    out.push_str(
-        "};\n\
-         const __zerho_cache = {};\n\
-         function __zerho_require(id) {\n\
-           if (__zerho_cache[id]) return __zerho_cache[id].exports;\n\
-           const factory = __zerho_registry[id];\n\
-           if (!factory) throw new Error(\"[zerho] missing module: \" + id);\n\
-           const mod = { exports: {} };\n\
-           __zerho_cache[id] = mod;\n\
-           factory(__zerho_require, mod.exports);\n\
-           return mod.exports;\n\
-         }\n\
-         __zerho_require(\"",
-    );
-    out.push_str(entry_id);
-    out.push_str("\");\n})();\n");
-    out
-}
-
-/// Emits a reusable Library Mode bundle in either ESM (`.mjs`) or `CommonJS` (`.cjs`) format.
-fn assemble_library_bundle(modules: &[CollectedModule], entry_id: &str, is_esm: bool) -> String {
-    let mut out = String::from("const __zerho_registry = {\n");
-    for module in modules {
-        push_module_factory(&mut out, module);
-    }
-    out.push_str(
-        "};\n\
-         const __zerho_cache = {};\n\
-         function __zerho_require(id) {\n\
-           if (__zerho_cache[id]) return __zerho_cache[id].exports;\n\
-           const factory = __zerho_registry[id];\n\
-           if (!factory) throw new Error(\"[zerho lib] missing module: \" + id);\n\
-           const mod = { exports: {} };\n\
-           __zerho_cache[id] = mod;\n\
-           factory(__zerho_require, mod.exports);\n\
-           return mod.exports;\n\
-         }\n\
-         const __zerho_lib_exports = __zerho_require(\"",
-    );
-    out.push_str(entry_id);
-    if is_esm {
-        out.push_str("\");\nexport default __zerho_lib_exports.default ?? __zerho_lib_exports;\nexport const __exports = __zerho_lib_exports;\n");
-    } else {
-        out.push_str("\");\nmodule.exports = __zerho_lib_exports;\n");
-    }
-    out
-}
-
-/// Emits a deduplicated shared ESM chunk imported by multiple dynamic async chunks.
-fn assemble_shared_esm_chunk(modules: &[CollectedModule]) -> String {
-    let mut out = String::from("export const __zerho_shared = {\n");
-    for module in modules {
-        push_module_factory(&mut out, module);
-    }
-    out.push_str("};\n");
-    out
-}
-
-/// Emits a split async ESM chunk loadable directly via native browser `import("/assets/chunk-<hash>.js")`.
-fn assemble_async_esm_chunk(
-    modules: &[CollectedModule],
-    entry_id: &str,
-    shared_chunk_url: Option<&str>,
-) -> String {
-    let mut out = String::new();
-    if let Some(shared_url) = shared_chunk_url {
-        let _ = writeln!(out, "import {{ __zerho_shared }} from \"{shared_url}\";");
-        out.push_str("const __zerho_registry = Object.assign({}, __zerho_shared, {\n");
-    } else {
-        out.push_str("const __zerho_registry = {\n");
-    }
-    for module in modules {
-        push_module_factory(&mut out, module);
-    }
-    if shared_chunk_url.is_some() {
-        out.push_str("});\n");
-    } else {
-        out.push_str("};\n");
-    }
-    out.push_str(
-        "const __zerho_cache = {};\n\
-         function __zerho_require(id) {\n\
-           if (__zerho_cache[id]) return __zerho_cache[id].exports;\n\
-           const factory = __zerho_registry[id];\n\
-           if (!factory) throw new Error(\"[zerho] missing chunk module: \" + id);\n\
-           const mod = { exports: {} };\n\
-           __zerho_cache[id] = mod;\n\
-           factory(__zerho_require, mod.exports);\n\
-           return mod.exports;\n\
-         }\n\
-         const __zerho_chunk_exports = __zerho_require(\"",
-    );
-    out.push_str(entry_id);
-    out.push_str("\");\nexport default __zerho_chunk_exports.default ?? __zerho_chunk_exports;\n");
-    out
-}
-
-fn rewrite_html_for_production(
-    html: &str,
-    entry: &Path,
-    js_file: &str,
-    js_sri: Option<&str>,
-    css_file: Option<&str>,
-    css_sri: Option<&str>,
-    preload_chunks: &[(String, Option<String>)],
-) -> String {
-    let entry_web = format!("/{}", entry.to_string_lossy().replace('\\', "/"));
-    let script_attr = match js_sri {
-        Some(sri) => format!("src=\"/{js_file}\" integrity=\"{sri}\" crossorigin=\"anonymous\""),
-        None => format!("src=\"/{js_file}\""),
-    };
-    let mut out = html.replace(&format!("src=\"{entry_web}\""), &script_attr);
-
-    let mut head_inject = String::new();
-    for (preload_file, preload_sri) in preload_chunks {
-        match preload_sri {
-            Some(sri) => {
-                let _ = writeln!(
-                    head_inject,
-                    "  <link rel=\"modulepreload\" href=\"/{preload_file}\" integrity=\"{sri}\" crossorigin=\"anonymous\" />"
-                );
-            }
-            None => {
-                let _ = writeln!(
-                    head_inject,
-                    "  <link rel=\"modulepreload\" href=\"/{preload_file}\" crossorigin=\"anonymous\" />"
-                );
-            }
-        }
-    }
-
-    if let Some(css) = css_file {
-        match css_sri {
-            Some(sri) => {
-                let _ = writeln!(
-                    head_inject,
-                    "  <link rel=\"stylesheet\" href=\"/{css}\" integrity=\"{sri}\" crossorigin=\"anonymous\" />"
-                );
-            }
-            None => {
-                let _ = writeln!(head_inject, "  <link rel=\"stylesheet\" href=\"/{css}\" />");
-            }
-        }
-    }
-
-    if !head_inject.is_empty() {
-        if let Some(pos) = out.find("</head>") {
-            out.insert_str(pos, &head_inject);
-        } else {
-            out.push_str(&head_inject);
+fn escape_js_string_literal(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for ch in raw.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c => out.push(c),
         }
     }
     out
@@ -1873,6 +1204,7 @@ mod tests {
         let prod = rewrite_html_for_production(
             html,
             Path::new("src/main.ts"),
+            "/",
             "assets/index-abcd1234.js",
             Some("sha384-jsHash"),
             Some("assets/index-9999aaaa.css"),
@@ -2395,6 +1727,153 @@ mod tests {
         let code = fs::read_to_string(&server_mjs).expect("read server.mjs");
         assert!(code.contains("\"SSR\": true") || code.contains("\"SSR\":true"));
         assert!(code.contains("export default"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn respects_build_base_and_empties_stale_out_dir() {
+        let dir = std::env::temp_dir().join("zerho-bundler-base-and-clean-test");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("src")).expect("create src dir");
+        fs::create_dir_all(dir.join("dist/assets")).expect("create stale dist dir");
+        let stale_file = dir.join("dist/assets/index-stale000.js");
+        fs::write(&stale_file, "// stale artifact").expect("write stale artifact");
+
+        fs::write(
+            dir.join("index.html"),
+            "<!doctype html><html><head><title>Subpath</title></head><body><script type=\"module\" src=\"/src/main.ts\"></script></body></html>",
+        )
+        .expect("write index.html");
+        fs::write(dir.join("src/styles.css"), "body { color: #f97316; }\n").expect("write css");
+        fs::write(
+            dir.join("src/lazy.ts"),
+            "export default function lazy() { return 'ok'; }\n",
+        )
+        .expect("write lazy.ts");
+        fs::write(
+            dir.join("src/main.ts"),
+            "import './styles.css';\nexport async function load() { return import('./lazy'); }\nconsole.log(load);\n",
+        )
+        .expect("write main.ts");
+
+        let mut cfg = ZerhoConfig::default();
+        cfg.project.root = dir.clone();
+        cfg.project.entry = PathBuf::from("src/main.ts");
+        cfg.build.base = "/demo".to_owned();
+        cfg.build.empty_out_dir = true;
+        cfg.build.minify = false;
+
+        let out = Bundler::new(cfg)
+            .build()
+            .expect("subpath build should succeed");
+        assert!(
+            !stale_file.exists(),
+            "empty_out_dir = true must remove stale artifacts"
+        );
+
+        let html = fs::read_to_string(out.out_dir.join("index.html")).expect("read index.html");
+        assert!(
+            html.contains("src=\"/demo/assets/index-"),
+            "index.html script should use /demo/ base: {html}"
+        );
+        assert!(
+            html.contains("href=\"/demo/assets/index-"),
+            "index.html stylesheet should use /demo/ base: {html}"
+        );
+
+        let entry_js =
+            fs::read_to_string(out.out_dir.join(&out.chunks[0].file_name)).expect("read entry js");
+        assert!(
+            entry_js.contains("/demo/assets/chunk-"),
+            "dynamic import should use /demo/ base: {entry_js}"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tree_shakes_side_effect_free_package_modules() {
+        let dir = std::env::temp_dir().join("zerho-bundler-side-effects-false-test");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("src")).expect("create src");
+        fs::create_dir_all(dir.join("node_modules/pure-icons")).expect("create pkg");
+
+        fs::write(
+            dir.join("node_modules/pure-icons/package.json"),
+            "{\"name\":\"pure-icons\",\"version\":\"1.0.0\",\"type\":\"module\",\"sideEffects\":false,\"exports\":{\".\":\"./index.js\",\"./unused\":\"./unused.js\"}}",
+        )
+        .expect("write package.json");
+        fs::write(
+            dir.join("node_modules/pure-icons/index.js"),
+            "export const usedIcon = () => 'USED_ICON';\n",
+        )
+        .expect("write index.js");
+        fs::write(
+            dir.join("node_modules/pure-icons/unused.js"),
+            "const DEAD_SIDE_EFFECT_TABLE = 'SHOULD_BE_DROPPED';\nconsole.log(DEAD_SIDE_EFFECT_TABLE);\nexport const unusedHelper = () => DEAD_SIDE_EFFECT_TABLE;\n",
+        )
+        .expect("write unused.js");
+        fs::write(
+            dir.join("src/main.ts"),
+            "import { usedIcon } from 'pure-icons';\nimport { nonExistent } from 'pure-icons/unused';\nconsole.log(usedIcon(), typeof nonExistent);\n",
+        )
+        .expect("write main.ts");
+
+        let mut cfg = ZerhoConfig::default();
+        cfg.project.root = dir.clone();
+        cfg.project.entry = PathBuf::from("src/main.ts");
+        cfg.build.minify = false;
+
+        let out = Bundler::new(cfg)
+            .build()
+            .expect("sideEffects: false build should succeed");
+        let js =
+            fs::read_to_string(out.out_dir.join(&out.chunks[0].file_name)).expect("read entry js");
+        assert!(js.contains("USED_ICON"), "used icon must be preserved");
+        assert!(
+            !js.contains("SHOULD_BE_DROPPED"),
+            "dead top-level code in sideEffects:false module should be pruned: {js}"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn bundles_vite_raw_and_url_query_imports() {
+        let dir = std::env::temp_dir().join("zerho-bundler-raw-url-query-test");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("src")).expect("create src");
+
+        fs::write(dir.join("src/query.sql"), "SELECT * FROM telemetry;\n")
+            .expect("write query.sql");
+        fs::write(
+            dir.join("src/main.ts"),
+            "import sqlText from './query.sql?raw';\n\
+             import sqlUrl from './query.sql?url';\n\
+             console.log(sqlText, sqlUrl);\n",
+        )
+        .expect("write main.ts");
+
+        let mut cfg = ZerhoConfig::default();
+        cfg.project.root = dir.clone();
+        cfg.project.entry = PathBuf::from("src/main.ts");
+        cfg.build.base = "/app/".to_owned();
+        cfg.build.minify = false;
+
+        let out = Bundler::new(cfg)
+            .build()
+            .expect("?raw and ?url build should succeed");
+        let js =
+            fs::read_to_string(out.out_dir.join(&out.chunks[0].file_name)).expect("read entry js");
+        assert!(
+            js.contains("SELECT * FROM telemetry;"),
+            "?raw file contents should be inlined: {js}"
+        );
+        assert!(
+            js.contains("/app/assets/query-"),
+            "?url should emit hashed asset URL with build.base: {js}"
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }

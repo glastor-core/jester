@@ -5,6 +5,31 @@ All notable changes to **zerho** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-27
+
+### Added
+- **Vite-Compatible `?raw` & `?url` Import Suffixes (`zerho-resolver`, `zerho-server`, `zerho-bundler`):** Supports `import txt from './file.sql?raw'` (UTF-8 string export) and `import url from './asset.svg?url'` (hashed asset URL respecting `[build].base`) in both `zerho dev` and `zerho build`.
+- **Real Chromium CDP E2E Gate in CI (`scripts/verify-chromium-e2e.mjs`, `.github/workflows/ci.yml`):** Automated headless Chrome verification in `e2e-real-npm` validating both `zerho preview` and `zerho dev` on real `react` + `react-dom` + `zustand` + `lucide-react` with 0 uncaught exceptions and real DOM click state updates.
+- **Public Base Path (`[build].base`) & Clean Output (`[build].empty_out_dir = true`):** Configurable subpath/relative/CDN base URL (`"/"`, `"/demo/"`, `"./"`, `"https://..."`) applied consistently across `index.html`, dynamic `import()` chunks, shared chunks, Web Workers, CSS `url(...)`, and `.wasm` imports, plus automatic pruning of stale hashed artifacts in `dist/` before each build (with safety guard `out_dir != root`).
+- **`package.json` `"sideEffects": false` Tree-Shaking & Barrel Optimization (`crates/zerho-transform/src/barrel.rs`, `crates/zerho-transform/src/cjs.rs`, `crates/zerho-bundler/src/assemble.rs`):** Detects `"sideEffects": false` / `"sideEffects": []` to bypass massive barrel files like `lucide-react` (`2,158 → 28` modules, `1,847 KB → 227 KB` / `64.9 KB` Brotli on a real React 19 + Zustand + Lucide app), prunes dead `process.env.NODE_ENV` CJS `require()` branches (`development.js`), and eliminates dead top-level helper code when zero exports survive tree-shaking.
+- **Upgraded Zero-Node `zerho test` (`crates/zerho-cli/src/test_runner.rs`):** Added local module `import` resolution (including `tsconfig.json` paths via `oxc_resolver`), object literals (`{ a: 1 }`), property/index access (`obj.prop`, `arr[0]`), deep `toEqual` comparison, and user-defined functions / arrow functions with lexical closure capture.
+- **Precompiled Official WASM Plugins in GitHub Releases (`.github/workflows/release.yml`):** Automatically compiles and attaches `zerho-plugin-{vue-sfc,svelte,solid}.wasm` + `.sha256` digests on every tagged release.
+- **Real NPM Ecosystem E2E CI (`e2e-real-npm` job, `crates/zerho-cli/tests/e2e_real_apps.rs`):** Automated end-to-end test installing real `react`, `react-dom`, `zustand`, and `lucide-react` packages from npm and validating `DevServer`, `Bundler` (`base`, `empty_out_dir`, Brotli, SHA-384 SRI, `dist/csp.json`), and `PreviewServer`.
+- **Interactive Telemetry Dashboard Showcase (`examples/react-dashboard/`, `https://zerho.xyz/demo/`):** Multi-view Linear-inspired dashboard (`Overview`, `Build Pipeline` with cache filters & crate ledger, `Security & SRI` with SHA-384 & CSP previews) published live at `/demo/` on `zerho.xyz`.
+
+### Changed
+- **Modular `zerho-bundler` Architecture:** Refactored `crates/zerho-bundler/src/lib.rs` into dedicated submodules (`assemble.rs`, `html.rs`, `targets.rs`) with zero breaking API changes and `unsafe_code = "forbid"`.
+
+### Fixed
+- **Real-Browser React 19 + Zustand + Lucide-React Runtime Compatibility (Chromium CDP Verified):**
+  - Lowered `export * from`, `export { a as b } from`, and empty `export {}` in `lower_esm_for_bundle` (`crates/zerho-transform/src/lib.rs`).
+  - Injected `process.env.NODE_ENV` (`"production"` in `zerho build` enabling ~460 KB React dev DCE via `oxc_minifier`, `"development"` in `zerho dev`).
+  - Added CJS↔ESM default-to-named interop in `__zerho_require` and protected `__zerho_cjs_entry` from `prune_unused_exports` when imported with named ESM syntax (`crates/zerho-bundler/src/assemble.rs`).
+  - Unified CommonJS `require()` resolution onto the bundler's shared singleton `__zerho_registry` (`crates/zerho-bundler/src/lib.rs`), preventing duplicate `react` instances across `react-dom`, `zustand`, and `lucide-react`.
+  - Upgraded `zerho dev` (`crates/zerho-server/src/lib.rs`, `prebundle_cjs_for_dev` in `crates/zerho-transform/src/cjs.rs`) with singleton external `/@zerho/deps/*` CJS imports, static ESM named exports (`export const createRoot = ...`), Windows `\\?\` canonicalization in `path_to_web_url`, and dev-mode `"sideEffects": false` Barrel Optimization (eliminating 2,130+ HTTP requests on `lucide-react`).
+- **Dev Server CSS `@import` Inlining (`crates/zerho-server/src/lib.rs`):** Added `expand_dev_css_imports` in `serve_css_module` and `transform_with_cache` so local `@import "./tokens.css";` rules inline identically in `zerho dev` and `zerho build`.
+- **Astro `/demo/` Directory Route (`website/src/pages/demo.astro`):** Replaced `website/public/demo/index.html` with a native Astro route (`is:inline` preserving SHA-384 SRI) so `/demo` and `/demo/` resolve in both `astro dev` and static builds.
+
 ## [1.0.0] - 2026-11-24
 
 ### Added

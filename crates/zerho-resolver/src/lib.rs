@@ -6,6 +6,33 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use zerho_core::{ModuleKind, ZerhoError, ZerhoResult};
 
+/// Optional Vite-compatible import query suffix (`?raw`, `?url`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AssetQuery {
+    #[default]
+    None,
+    /// Import file contents as a UTF-8 string (`import txt from './file.md?raw'`).
+    Raw,
+    /// Emit file as a hashed static asset and export its public URL (`import u from './logo.svg?url'`).
+    Url,
+}
+
+/// Splits a specifier into `(clean_path, AssetQuery)` for Vite-style `?raw` and `?url` imports.
+pub fn split_specifier_query(specifier: &str) -> (&str, AssetQuery) {
+    let Some((base, qs)) = specifier.split_once('?') else {
+        return (specifier, AssetQuery::None);
+    };
+    let mut query = AssetQuery::None;
+    for part in qs.split('&') {
+        match part {
+            "raw" => query = AssetQuery::Raw,
+            "url" => query = AssetQuery::Url,
+            _ => {}
+        }
+    }
+    (base, query)
+}
+
 /// Output of module resolution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedModule {
@@ -13,6 +40,7 @@ pub struct ResolvedModule {
     pub specifier: String,
     pub kind: ModuleKind,
     pub is_virtual: bool,
+    pub query: AssetQuery,
 }
 
 /// Resolution trait shared by the dev server and production bundler.
@@ -87,26 +115,31 @@ impl Resolver for OxcResolver {
                 specifier: specifier.to_owned(),
                 kind: ModuleKind::Virtual,
                 is_virtual: true,
+                query: AssetQuery::None,
             });
         }
+
+        let (clean_specifier, asset_query) = split_specifier_query(specifier);
 
         let base_dir = match importer.and_then(Path::parent) {
             Some(parent) => parent,
             None => self.root.as_path(),
         };
 
-        let normalized = specifier.strip_prefix('/').map_or(specifier, |stripped| {
-            // Treat URL-root imports like `/src/main.tsx` as relative to project root.
-            stripped
-        });
-        let lookup_dir = if specifier.starts_with('/') {
+        let normalized = clean_specifier
+            .strip_prefix('/')
+            .map_or(clean_specifier, |stripped| {
+                // Treat URL-root imports like `/src/main.tsx` as relative to project root.
+                stripped
+            });
+        let lookup_dir = if clean_specifier.starts_with('/') {
             self.root.as_path()
         } else {
             base_dir
         };
 
         // Ensure relative lookup when stripping leading slash for project-root paths.
-        let query = if specifier.starts_with('/') && !normalized.starts_with('.') {
+        let query = if clean_specifier.starts_with('/') && !normalized.starts_with('.') {
             format!("./{normalized}")
         } else {
             normalized.to_owned()
@@ -122,7 +155,10 @@ impl Resolver for OxcResolver {
                 })?;
 
         let path = resolution.full_path();
-        let kind = ModuleKind::from_path(&path);
+        let kind = match asset_query {
+            AssetQuery::Url => ModuleKind::Asset,
+            AssetQuery::Raw | AssetQuery::None => ModuleKind::from_path(&path),
+        };
         let canonical = path.to_string_lossy().into_owned();
 
         Ok(ResolvedModule {
@@ -130,6 +166,7 @@ impl Resolver for OxcResolver {
             specifier: canonical,
             kind,
             is_virtual: false,
+            query: asset_query,
         })
     }
 }
@@ -195,6 +232,29 @@ mod tests {
                 .ends_with(Path::new("src").join("utils").join("math.ts"))
         );
         assert_eq!(module.kind, ModuleKind::Ts);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolves_vite_raw_and_url_query_suffixes() {
+        let dir = std::env::temp_dir().join("zerho-resolver-raw-url-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).expect("create src");
+        std::fs::write(dir.join("src/note.md"), "# Hello zerho\n").expect("write note.md");
+
+        let resolver = OxcResolver::new(&dir);
+        let raw_mod = resolver
+            .resolve("./note.md?raw", Some(&dir.join("src/main.ts")))
+            .expect("?raw should resolve");
+        assert_eq!(raw_mod.query, AssetQuery::Raw);
+        assert!(raw_mod.path.ends_with("note.md"));
+
+        let url_mod = resolver
+            .resolve("./note.md?url", Some(&dir.join("src/main.ts")))
+            .expect("?url should resolve");
+        assert_eq!(url_mod.query, AssetQuery::Url);
+        assert_eq!(url_mod.kind, ModuleKind::Asset);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

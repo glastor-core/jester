@@ -51,7 +51,7 @@ impl<'a> Visit<'a> for ScopeHoistCollector {
 /// Returns `None` if any module uses `CommonJS`, circular dependencies, namespace imports,
 /// `export *`, or `eval`/`with` — allowing the caller to fall back cleanly to registry mode.
 pub fn try_scope_hoist_bundle(modules: &[HoistedModuleInput]) -> Option<String> {
-    if modules.is_empty() {
+    if modules.is_empty() || modules.iter().any(|m| m.code.contains("__zerho_require")) {
         return None;
     }
 

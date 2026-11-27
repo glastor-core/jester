@@ -18,6 +18,7 @@ zerho-config.workspace = true
 zerho-core.workspace = true
 zerho-graph.workspace = true
 zerho-plugin.workspace = true
+zerho-resolver.workspace = true
 zerho-server.workspace = true
 zerho-transform.workspace = true
 

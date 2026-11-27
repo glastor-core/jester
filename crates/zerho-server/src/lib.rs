@@ -9,6 +9,7 @@ use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{any, get};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -18,12 +19,12 @@ use tokio::sync::broadcast;
 use zerho_config::{ZerhoConfig, build_import_meta_env_json, load_env_vars};
 use zerho_core::{ModuleId, ModuleKind, ZerhoError, ZerhoResult};
 use zerho_graph::{CachedArtifact, DiskCache, ModuleGraph};
-use zerho_plugin::{PluginRegistry, register_wasm_plugins};
-use zerho_resolver::{OxcResolver, Resolver};
+use zerho_plugin::{DefinePlugin, PluginRegistry, register_wasm_plugins};
+use zerho_resolver::{AssetQuery, OxcResolver, Resolver};
 use zerho_transform::{
-    TransformInput, TransformPipeline, inline_css_imports, is_likely_commonjs,
-    lower_esm_for_bundle, prebundle_cjs_graph_to_esm, rewrite_imports, wrap_cjs_as_esm,
-    wrap_css_as_hmr_module, wrap_css_with_exports_as_hmr_module,
+    BarrelExport, TransformInput, TransformPipeline, inline_css_imports, is_likely_commonjs,
+    lower_esm_for_bundle, parse_barrel_exports, prebundle_cjs_for_dev, rewrite_barrel_imports,
+    rewrite_imports, wrap_cjs_as_esm, wrap_css_as_hmr_module, wrap_css_with_exports_as_hmr_module,
 };
 
 const INSPECT_HTML: &str = include_str!("inspect.html");
@@ -81,6 +82,12 @@ impl DevServer {
             config.cache.remote_token.as_deref(),
         );
         let mut registry = PluginRegistry::new();
+        let mut defines = BTreeMap::new();
+        defines.insert(
+            "process.env.NODE_ENV".to_owned(),
+            "\"development\"".to_owned(),
+        );
+        registry.register(DefinePlugin::new(defines));
         if let Err(err) = register_wasm_plugins(
             &mut registry,
             &root,
@@ -665,13 +672,15 @@ async fn serve_dep(
         return (StatusCode::NOT_FOUND, "dependency file not found").into_response();
     };
 
-    // Automatic deep CJS -> ESM pre-bundling (resolving nested require() calls, cached in redb).
+    // Automatic dev CJS -> browser ESM pre-bundling:
+    // keeps bare external deps (`react`, `scheduler`) as singleton `/@zerho/deps/*` imports
+    // and emits real ESM named exports (`export const createRoot = ...`).
     let source = if resolved.kind == ModuleKind::Js && is_likely_commonjs(&raw_source) {
         let entry_canon = resolved
             .path
             .canonicalize()
             .unwrap_or_else(|_| resolved.path.clone());
-        prebundle_cjs_graph_to_esm(&entry_canon, &raw_source, |spec, importer| {
+        prebundle_cjs_for_dev(&entry_canon, &raw_source, |spec, importer| {
             let dep = state.resolver.resolve(spec, Some(importer)).ok()?;
             if dep.is_virtual {
                 return None;
@@ -720,6 +729,7 @@ async fn serve_dep(
     js_response(rewritten, "public, max-age=31536000, immutable")
 }
 
+#[allow(clippy::too_many_lines)]
 async fn serve_module(
     AxumPath(req_path): AxumPath<String>,
     State(state): State<Arc<ServerState>>,
@@ -756,10 +766,27 @@ async fn serve_module(
     };
 
     let kind = resolved.kind;
-    let is_asset_import = request
-        .uri()
-        .query()
-        .is_some_and(|q| q.split('&').any(|part| part == "import"));
+    let query_str = request.uri().query().unwrap_or("");
+    let is_raw_import = query_str.split('&').any(|part| part == "raw");
+    let is_url_import = query_str.split('&').any(|part| part == "url");
+    let is_asset_import = query_str.split('&').any(|part| part == "import");
+
+    if is_raw_import {
+        let Ok(raw_text) = tokio::fs::read_to_string(&canonical).await else {
+            return (StatusCode::NOT_FOUND, "file not found").into_response();
+        };
+        return js_response(
+            format!("export default \"{}\";\n", escape_json(&raw_text)),
+            "no-cache",
+        );
+    }
+
+    if is_url_import {
+        return js_response(
+            format!("export default \"{}\";\n", escape_json(&clean_specifier)),
+            "no-cache",
+        );
+    }
 
     if kind == ModuleKind::Asset {
         if is_asset_import {
@@ -840,6 +867,32 @@ async fn serve_module(
     }
 }
 
+fn is_side_effect_free_pkg(path: &Path) -> bool {
+    let mut current = path.parent();
+    while let Some(dir) = current {
+        let pkg = dir.join("package.json");
+        if pkg.is_file() {
+            let Ok(raw) = std::fs::read_to_string(&pkg) else {
+                return false;
+            };
+            let Some(idx) = raw.find("\"sideEffects\"") else {
+                return false;
+            };
+            let rest = raw[idx + "\"sideEffects\"".len()..].trim_start();
+            let Some(after_colon) = rest.strip_prefix(':') else {
+                return false;
+            };
+            let val = after_colon.trim_start();
+            return val.starts_with("false")
+                || val
+                    .strip_prefix('[')
+                    .is_some_and(|s| s.trim_start().starts_with(']'));
+        }
+        current = dir.parent();
+    }
+    false
+}
+
 fn rewrite_dev_script(
     state: &ServerState,
     canonical: &Path,
@@ -847,7 +900,42 @@ fn rewrite_dev_script(
     code: &str,
     resolved_edges: &mut Vec<ModuleId>,
 ) -> ZerhoResult<String> {
-    let rewritten = rewrite_imports(code, canonical, |spec| {
+    // Bypass pure / sideEffects:false barrel files (e.g. `lucide-react`) in dev mode too,
+    // eliminating 2,000+ browser HTTP waterfall requests on page load.
+    type BarrelCacheEntry = Option<(PathBuf, BTreeMap<String, BarrelExport>)>;
+    let mut barrel_cache: std::collections::HashMap<String, BarrelCacheEntry> =
+        std::collections::HashMap::new();
+    let (after_barrel, _) = rewrite_barrel_imports(code, canonical, |barrel_spec, sym| {
+        let entry = barrel_cache
+            .entry(barrel_spec.to_owned())
+            .or_insert_with(|| {
+                let resolved = state.resolver.resolve(barrel_spec, Some(canonical)).ok()?;
+                if resolved.is_virtual || !resolved.kind.is_script() {
+                    return None;
+                }
+                let barrel_canon = resolved.path.canonicalize().unwrap_or(resolved.path);
+                let src = std::fs::read_to_string(&barrel_canon).ok()?;
+                let map = parse_barrel_exports(
+                    &src,
+                    &barrel_canon,
+                    is_side_effect_free_pkg(&barrel_canon),
+                )?;
+                Some((barrel_canon, map))
+            });
+        let (barrel_canon, map) = entry.as_ref()?;
+        let target = map.get(sym)?;
+        let leaf_resolved = state
+            .resolver
+            .resolve(&target.source_specifier, Some(barrel_canon))
+            .ok()?;
+        if leaf_resolved.is_virtual {
+            return None;
+        }
+        let leaf_url = path_to_web_url(&state.root, &leaf_resolved.path)?;
+        Some((leaf_url, target.original_name.clone()))
+    })?;
+
+    let rewritten = rewrite_imports(&after_barrel, canonical, |spec| {
         if is_bare_specifier(spec) {
             resolved_edges.push(ModuleId::from_specifier(&format!("dep:{spec}")));
             return Some(format!("/@zerho/deps/{spec}"));
@@ -856,10 +944,16 @@ fn rewrite_dev_script(
             let target_canon = target.path.canonicalize().unwrap_or(target.path);
             resolved_edges.push(ModuleId::from_specifier(&target_canon.to_string_lossy()));
             let url = path_to_web_url(&state.root, &target_canon)?;
-            return if target.kind == ModuleKind::Asset {
-                Some(format!("{url}?import"))
-            } else {
-                Some(url)
+            return match target.query {
+                AssetQuery::Raw => Some(format!("{url}?raw")),
+                AssetQuery::Url => Some(format!("{url}?url")),
+                AssetQuery::None => {
+                    if target.kind == ModuleKind::Asset {
+                        Some(format!("{url}?import"))
+                    } else {
+                        Some(url)
+                    }
+                }
             };
         }
         None
@@ -986,7 +1080,10 @@ fn is_bare_specifier(spec: &str) -> bool {
 }
 
 fn path_to_web_url(root: &Path, target: &Path) -> Option<String> {
-    let rel = target.strip_prefix(root).ok()?;
+    let canon = target
+        .canonicalize()
+        .unwrap_or_else(|_| target.to_path_buf());
+    let rel = canon.strip_prefix(root).ok()?;
     Some(format!("/{}", rel.to_string_lossy().replace('\\', "/")))
 }
 

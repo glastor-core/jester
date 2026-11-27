@@ -110,3 +110,69 @@ jobs:
         env:
           ASTRO_TELEMETRY_DISABLED: "1"
         run: npm --prefix website run build
+
+  e2e-real-npm:
+    name: Real NPM E2E (React + Zustand + Lucide)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@9d47c6ad4b02e050fd841d890b2ea34778fd09d6 # v2.7.8
+
+      - name: Setup Node.js (for real npm package installation)
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Install real React + Zustand + Lucide packages
+        run: |
+          mkdir -p /tmp/zerho-real-npm-app
+          cd /tmp/zerho-real-npm-app
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund react react-dom zustand lucide-react
+
+      - name: Run real npm E2E test (Rust + HTTP)
+        env:
+          ZERHO_REAL_NPM_APP_DIR: /tmp/zerho-real-npm-app
+        run: cargo test -p zerho-cli --test e2e_real_apps e2e_real_npm_react_zustand_lucide -- --ignored --nocapture
+
+      - name: Verify live React 19 + Zustand + Lucide in real Chromium (zerho dev & preview)
+        run: |
+          cargo build -p zerho-cli
+          cat > /tmp/zerho-real-npm-app/zerho.toml << 'EOF'
+          [project]
+          name = "real-npm-e2e"
+          root = "."
+          entry = "src/main.tsx"
+          framework = "react"
+
+          [build]
+          out_dir = "dist"
+          base = "/"
+          empty_out_dir = true
+          minify = true
+          brotli = true
+          EOF
+          ./target/debug/zerho build --config /tmp/zerho-real-npm-app/zerho.toml
+
+          ./target/debug/zerho preview --config /tmp/zerho-real-npm-app/zerho.toml --port 4199 &
+          PREV_PID=$!
+          sleep 1
+          node scripts/verify-chromium-e2e.mjs http://127.0.0.1:4199/
+          kill $PREV_PID || true
+
+          ./target/debug/zerho dev --config /tmp/zerho-real-npm-app/zerho.toml --port 5199 &
+          DEV_PID=$!
+          sleep 2
+          node scripts/verify-chromium-e2e.mjs http://127.0.0.1:5199/
+          kill $DEV_PID || true

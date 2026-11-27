@@ -26,8 +26,11 @@ use std::path::{Path, PathBuf};
 use zerho_core::{ContentHash, Framework, ModuleKind, ZerhoError, ZerhoResult};
 use zerho_plugin::{PluginContext, PluginRegistry};
 
-pub use barrel::{BarrelExport, parse_pure_barrel, rewrite_barrel_imports};
-pub use cjs::{collect_cjs_requires, prebundle_cjs_graph_to_esm, rewrite_cjs_requires};
+pub use barrel::{BarrelExport, parse_barrel_exports, parse_pure_barrel, rewrite_barrel_imports};
+pub use cjs::{
+    collect_cjs_requires, prebundle_cjs_for_dev, prebundle_cjs_graph_to_esm, rewrite_cjs_requires,
+    rewrite_cjs_requires_for_env,
+};
 pub use css_assets::{inline_css_imports, rewrite_css_urls};
 pub use scope_hoist::{HoistedModuleInput, try_scope_hoist_bundle};
 pub use svg::optimize_svg;
@@ -247,6 +250,7 @@ pub fn rewrite_imports(
 
 /// Lowers an ESM module into a CommonJS-like factory body (`__zerho_require`, `__zerho_exports`)
 /// for zero-waterfall single-file production bundling.
+#[allow(clippy::too_many_lines)]
 pub fn lower_esm_for_bundle(
     js_code: &str,
     path: &Path,
@@ -265,7 +269,7 @@ pub fn lower_esm_for_bundle(
     let mut edits: Vec<(Span, String)> = Vec::new();
     let mut trailing_exports: Vec<String> = Vec::new();
 
-    for stmt in &parsed.program.body {
+    for (stmt_idx, stmt) in parsed.program.body.iter().enumerate() {
         match stmt {
             Statement::ImportDeclaration(decl) => {
                 let dep_id = resolve_dep(decl.source.value.as_str());
@@ -275,7 +279,7 @@ pub fn lower_esm_for_bundle(
                 let code = lower_export_decl(js_code, decl, &mut trailing_exports);
                 edits.push((decl.span, code));
             }
-            Statement::ExportNamedDeclaration(decl) if !decl.specifiers.is_empty() => {
+            Statement::ExportNamedDeclaration(decl) => {
                 let exports: Vec<String> = decl
                     .specifiers
                     .iter()
@@ -288,6 +292,45 @@ pub fn lower_esm_for_bundle(
                     })
                     .collect();
                 edits.push((decl.span, exports.join("\n")));
+            }
+            Statement::ExportFromDeclaration(decl) => {
+                let dep_id = resolve_dep(decl.source.value.as_str());
+                let code = if let Some(id) = dep_id {
+                    let escaped = escape_js_string(&id);
+                    let tmp = format!("__zerho_re_{stmt_idx}");
+                    let mut lines = vec![format!("const {tmp} = __zerho_require(\"{escaped}\");")];
+                    for spec in &decl.specifiers {
+                        lines.push(format!(
+                            "__zerho_exports.{} = {tmp}.{};",
+                            spec.exported.name(),
+                            spec.local.name()
+                        ));
+                    }
+                    lines.join("\n")
+                } else {
+                    String::new()
+                };
+                edits.push((decl.span, code));
+            }
+            Statement::ExportAllDeclaration(decl) => {
+                let dep_id = resolve_dep(decl.source.value.as_str());
+                let code = if let Some(id) = dep_id {
+                    let escaped = escape_js_string(&id);
+                    if let Some(alias) = &decl.exported {
+                        format!(
+                            "__zerho_exports.{} = __zerho_require(\"{escaped}\");",
+                            alias.name()
+                        )
+                    } else {
+                        let tmp = format!("__zerho_star_{stmt_idx}");
+                        format!(
+                            "const {tmp} = __zerho_require(\"{escaped}\");\nfor (const __k of Object.keys({tmp})) {{ if (__k !== \"default\") __zerho_exports[__k] = {tmp}[__k]; }}"
+                        )
+                    }
+                } else {
+                    String::new()
+                };
+                edits.push((decl.span, code));
             }
             Statement::ExportDefaultDeclaration(decl) => {
                 let raw = js_code

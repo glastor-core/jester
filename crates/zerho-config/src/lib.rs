@@ -185,6 +185,10 @@ impl SourceMapMode {
 #[allow(clippy::struct_excessive_bools)]
 pub struct BuildConfig {
     pub out_dir: PathBuf,
+    /// Public base path used for emitted asset, chunk, and HTML URLs (default: `"/"`).
+    pub base: String,
+    /// Remove stale files from `out_dir` before writing fresh build output (default: `true`).
+    pub empty_out_dir: bool,
     pub minify: bool,
     pub sourcemap: SourceMapMode,
     pub target: String,
@@ -200,10 +204,45 @@ pub struct BuildConfig {
     pub entries: BTreeMap<String, PathBuf>,
 }
 
+impl BuildConfig {
+    /// Returns a canonicalized public base prefix ending with `/` (e.g. `"/"`, `"/demo/"`, `"./"`).
+    pub fn normalized_base(&self) -> String {
+        let trimmed = self.base.trim();
+        if trimmed.is_empty() || trimmed == "/" {
+            return "/".to_owned();
+        }
+        if trimmed == "." || trimmed == "./" {
+            return "./".to_owned();
+        }
+        let mut out = if trimmed.starts_with("http://")
+            || trimmed.starts_with("https://")
+            || trimmed.starts_with("./")
+            || trimmed.starts_with('/')
+        {
+            trimmed.to_owned()
+        } else {
+            format!("/{trimmed}")
+        };
+        if !out.ends_with('/') {
+            out.push('/');
+        }
+        out
+    }
+
+    /// Joins `normalized_base()` with a bundle-relative path (e.g. `"assets/index-abc.js"`).
+    pub fn asset_url(&self, rel_path: &str) -> String {
+        let base = self.normalized_base();
+        let clean = rel_path.trim_start_matches('/');
+        format!("{base}{clean}")
+    }
+}
+
 impl Default for BuildConfig {
     fn default() -> Self {
         Self {
             out_dir: PathBuf::from("dist"),
+            base: "/".to_owned(),
+            empty_out_dir: true,
             minify: true,
             sourcemap: SourceMapMode::Linked,
             target: "es2022".to_owned(),
@@ -333,6 +372,10 @@ impl ZerhoConfig {
                 ("build", "out_dir") => {
                     config.build.out_dir = PathBuf::from(parse_string(value, line_no)?);
                 }
+                ("build", "base") => config.build.base = parse_string(value, line_no)?,
+                ("build", "empty_out_dir") => {
+                    config.build.empty_out_dir = parse_bool(value, line_no)?;
+                }
                 ("build", "minify") => config.build.minify = parse_bool(value, line_no)?,
                 ("build", "sourcemap") => {
                     config.build.sourcemap = SourceMapMode::parse(&parse_string(value, line_no)?)?;
@@ -438,6 +481,8 @@ impl ZerhoConfig {
              open = {}\n\n\
              [build]\n\
              out_dir = \"{}\"\n\
+             base = \"{}\"\n\
+             empty_out_dir = {}\n\
              minify = {}\n\
              sourcemap = \"{}\"\n\
              target = \"{}\"\n\
@@ -461,6 +506,8 @@ impl ZerhoConfig {
             self.server.hmr,
             self.server.open,
             self.build.out_dir.display(),
+            self.build.base,
+            self.build.empty_out_dir,
             self.build.minify,
             self.build.sourcemap.as_str(),
             self.build.target,
@@ -525,6 +572,8 @@ impl ZerhoConfig {
       "type": "object",
       "properties": {
         "out_dir": { "type": "string", "default": "dist" },
+        "base": { "type": "string", "default": "/" },
+        "empty_out_dir": { "type": "boolean", "default": true },
         "minify": { "type": "boolean", "default": true },
         "sourcemap": { "type": "string", "enum": ["none", "linked", "inline", "hidden"], "default": "linked" },
         "target": { "type": "string", "default": "es2022" },
@@ -825,8 +874,31 @@ mod tests {
             "\"security\"",
             "\"assets\"",
             "\"optimize_images\"",
+            "\"base\"",
+            "\"empty_out_dir\"",
         ] {
             assert!(schema.contains(key), "JSON schema missing {key}");
         }
+    }
+
+    #[test]
+    fn normalizes_build_base_and_asset_urls() {
+        let mut cfg = BuildConfig::default();
+        assert_eq!(cfg.normalized_base(), "/");
+        assert_eq!(cfg.asset_url("assets/app.js"), "/assets/app.js");
+
+        cfg.base = "demo".to_owned();
+        assert_eq!(cfg.normalized_base(), "/demo/");
+        assert_eq!(cfg.asset_url("/assets/app.js"), "/demo/assets/app.js");
+
+        cfg.base = "/sub/app".to_owned();
+        assert_eq!(cfg.normalized_base(), "/sub/app/");
+
+        cfg.base = "./".to_owned();
+        assert_eq!(cfg.normalized_base(), "./");
+        assert_eq!(cfg.asset_url("assets/app.js"), "./assets/app.js");
+
+        cfg.base = "https://cdn.example.com/static".to_owned();
+        assert_eq!(cfg.normalized_base(), "https://cdn.example.com/static/");
     }
 }
