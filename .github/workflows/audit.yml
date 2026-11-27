@@ -134,12 +134,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Pre-install Trivy v0.76.2 (upstream v0.76.0 tag missing in Nemesis)
-        run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin v0.76.2
-
       - name: Run GLASTOR Nemesis Universal Auditor
-        uses: glastor-core/nemesis@a2fe3c680c81926ba2f277d9aba4e25045d47335 # v1
+        uses: glastor-core/nemesis@c0a69644f3a705a9653f17b899c2f62095be4972 # v1 (Trivy v0.76.2)
         with:
           target-path: "."
           scan-secrets: "true"
