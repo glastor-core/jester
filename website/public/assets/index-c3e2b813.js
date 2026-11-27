@@ -145,13 +145,13 @@
 }</pre>
       </div>
     </section>
-  </div>`}async function m(){let e=await import(`/assets/chunk-e9d67afc.js`);a=!0,o=e.default();let t=document.getElementById(`load-analytics`);t&&(t.setAttribute(`data-loaded`,`true`),t.innerHTML=`<span class="material-symbols-outlined notranslate" translate="no">check</span><span>Async Chunk Loaded</span>`);let n=document.getElementById(`analytics-slot`);n&&(n.innerHTML=o)}function h(){let e=document.getElementById(`view-root`);if(!e)return;let t=s[n],r=document.getElementById(`topbar-heading`),a=document.getElementById(`topbar-subtitle`),o=document.getElementById(`stage-filter`);r&&(r.textContent=t.title),a&&(a.textContent=t.subtitle),o&&(o.placeholder=t.placeholder),n===`overview`?e.innerHTML=d():n===`pipeline`?(e.innerHTML=f(),e.querySelectorAll(`[data-cache-filter]`).forEach(e=>{e.addEventListener(`click`,()=>{i=e.dataset.cacheFilter??`all`,h()})}),e.querySelector(`[data-trigger-analytics]`)?.addEventListener(`click`,()=>{m()})):e.innerHTML=p()}function g(e){e.innerHTML=`<div class="app-shell">
+  </div>`}async function m(){let e=await import(`/assets/chunk-080085f2.js`);a=!0,o=e.default();let t=document.getElementById(`load-analytics`);t&&(t.setAttribute(`data-loaded`,`true`),t.innerHTML=`<span class="material-symbols-outlined notranslate" translate="no">check</span><span>Async Chunk Loaded</span>`);let n=document.getElementById(`analytics-slot`);n&&(n.innerHTML=o)}function h(){let e=document.getElementById(`view-root`);if(!e)return;let t=s[n],r=document.getElementById(`topbar-heading`),a=document.getElementById(`topbar-subtitle`),o=document.getElementById(`stage-filter`);r&&(r.textContent=t.title),a&&(a.textContent=t.subtitle),o&&(o.placeholder=t.placeholder),n===`overview`?e.innerHTML=d():n===`pipeline`?(e.innerHTML=f(),e.querySelectorAll(`[data-cache-filter]`).forEach(e=>{e.addEventListener(`click`,()=>{i=e.dataset.cacheFilter??`all`,h()})}),e.querySelector(`[data-trigger-analytics]`)?.addEventListener(`click`,()=>{m()})):e.innerHTML=p()}function g(e){e.innerHTML=`<div class="app-shell">
     <aside class="sidebar">
       <div>
         <div class="brand notranslate" translate="no">
           <span class="brand-icon"><span class="material-symbols-outlined">bolt</span></span>
           <span>zerho</span>
-          <span class="brand-pill">v1.0.0</span>
+          <span class="brand-pill">v1.1.0</span>
         </div>
         <nav class="nav-group" aria-label="Dashboard navigation">
           <div class="nav-label">Telemetry</div>
@@ -202,4 +202,4 @@
       <main id="view-root" class="content"></main>
     </div>
   </div>`,h();let i=document.getElementById(`stage-filter`);i?.addEventListener(`input`,()=>{if(r=i.value,n===`security`){let e=document.getElementById(`security-list`);e&&(e.innerHTML=u(t.checks,!0));return}let e=document.getElementById(`stages-list`);e&&(e.innerHTML=l(t.stages))}),document.querySelectorAll(`[data-nav]`).forEach(e=>{e.addEventListener(`click`,()=>{n=e.dataset.nav??`overview`,document.querySelectorAll(`[data-nav]`).forEach(e=>{e.dataset.active=String(e.dataset.nav===n)}),h()})}),document.getElementById(`load-analytics`)?.addEventListener(`click`,()=>{m()})}let _=document.getElementById(`root`);_&&g(_)})();
-//# sourceMappingURL=index-3b58ed17.js.map
+//# sourceMappingURL=index-c3e2b813.js.map

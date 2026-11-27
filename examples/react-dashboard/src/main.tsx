@@ -309,7 +309,7 @@ function mountDashboard(root: HTMLElement): void {
         <div class="brand notranslate" translate="no">
           <span class="brand-icon"><span class="material-symbols-outlined">bolt</span></span>
           <span>zerho</span>
-          <span class="brand-pill">v1.0.0</span>
+          <span class="brand-pill">v1.1.0</span>
         </div>
         <nav class="nav-group" aria-label="Dashboard navigation">
           <div class="nav-label">Telemetry</div>

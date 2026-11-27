@@ -24,5 +24,5 @@ const e={"src/AnalyticsPanel.ts":function(e,t){function n(){return[{file:`assets
         <td style="color:#fb923c;">${e.sri}</td>
       </tr>`).join(``)}</tbody>
     </table>
-  </section>`},t.getChunkBreakdown=n}},t={};function n(r){if(t[r])return t[r].exports;let i=e[r];if(!i)throw Error(`[zerho] missing chunk module: `+r);let a={exports:{}};return t[r]=a,i(n,a.exports),a.exports}const r=n(`src/AnalyticsPanel.ts`);export default r.default??r;
-//# sourceMappingURL=chunk-e9d67afc.js.map
+  </section>`},t.getChunkBreakdown=n}},t={};function n(r){if(t[r])return t[r].exports;let i=e[r];if(!i)throw Error(`[zerho] missing chunk module: `+r);let a={exports:{}};return t[r]=a,i(n,a.exports),a.exports.default&&(typeof a.exports.default==`object`||typeof a.exports.default==`function`)&&Object.keys(a.exports).length===1&&Object.assign(a.exports,a.exports.default),a.exports}const r=n(`src/AnalyticsPanel.ts`);export default r.default??r;
+//# sourceMappingURL=chunk-080085f2.js.map
