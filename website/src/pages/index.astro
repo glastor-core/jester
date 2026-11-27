@@ -64,9 +64,10 @@ const pillars = [
       'TypeScript, JSX, CSS Modules, SVG, and WebP optimization execute directly inside one Rust binary — no Babel, PostCSS, Rollup, or sharp.',
     codeLabel: 'zerho.toml · compiler & assets',
     code: `[build]
+base = "/"              # subpath/CDN base URL
+empty_out_dir = true    # prune stale hashes
 minify = true           # oxc_minifier + mangler + DCE
-scope_hoisting = true   # zero runtime module wrappers
-sourcemap = "linked"
+scope_hoisting = true   # zero runtime wrappers
 
 [assets]
 optimize_svg = true     # pure-Rust SVG minifier
@@ -74,13 +75,13 @@ optimize_images = true  # PNG/JPG -> lossless WebP`,
     items: [
       {
         icon: 'bolt',
-        title: 'Oxc Compiler, Minifier & Scope Hoisting',
-        desc: 'Sub-millisecond TS/JSX transforms, lexical Scope Hoisting, AST constant folding/DCE, mangling, and Source Maps v3.',
+        title: 'Oxc Compiler, Minifier & sideEffects: false Barrel Bypass',
+        desc: 'Sub-millisecond TS/JSX transforms, lexical Scope Hoisting, AST DCE, and barrel bypassing (lucide-react: 2,158 -> 28 mods, 64.9 KB Brotli).',
       },
       {
         icon: 'layers',
-        title: 'LightningCSS, @import & url() Rewriting',
-        desc: 'Built-in CSS nesting, *.module.css scoped class maps, @import inlining, and blake3-hashed font/image asset URLs.',
+        title: 'LightningCSS, @import/url() & Vite ?raw / ?url Queries',
+        desc: 'Built-in CSS nesting, *.module.css scoped class maps, @import inlining, blake3-hashed URLs, and ?raw / ?url asset imports in dev & build.',
       },
       {
         icon: 'image',
@@ -174,13 +175,13 @@ fuel_limit = 1000000   # zerho:plugin@0.1.0`,
       },
       {
         icon: 'fact_check',
-        title: 'zerho check, dist/stats.html & Live /__inspect Treemap',
-        desc: 'Full-graph static auditor catching broken imports, cycles, and missing .env vars, paired with live interactive bundle treemaps.',
+        title: 'zerho test, zerho check & Live /__inspect Treemap',
+        desc: 'Built-in Zero-Node TS test runner (local imports, objects & functions), full-graph static auditor, and interactive bundle treemaps.',
       },
       {
         icon: 'extension',
-        title: 'Fuel-Metered Wasmtime Plugins (UTF-8 String ABI)',
-        desc: 'Run resolve_id, load, and transform hooks inside isolated wasmtime v29 linear memory with a complete Rust -> .wasm example included.',
+        title: 'Fuel-Metered Wasmtime Plugins & Prebuilt .wasm Releases',
+        desc: 'Run resolve_id, load, and transform hooks inside wasmtime v29 linear memory, with precompiled Vue, Svelte & Solid .wasm plugins on Releases.',
       },
     ],
   },
@@ -188,14 +189,14 @@ fuel_limit = 1000000   # zerho:plugin@0.1.0`,
 
 const crates = [
   { idx: '01', name: 'zerho-core', desc: 'Core identifiers (ModuleId, blake3 ContentHash), ModuleKind, Framework, and typed error hierarchy.' },
-  { idx: '02', name: 'zerho-config', desc: 'Declarative zerho.toml parser, validator, MPA/SSR/budgets/security config, and JSON Schema generator.' },
-  { idx: '03', name: 'zerho-resolver', desc: 'Native ESM/CJS & tsconfig.json paths resolution powered by oxc_resolver, package.json exports, and virtual modules.' },
+  { idx: '02', name: 'zerho-config', desc: 'Declarative zerho.toml parser, validator, base/empty_out_dir/MPA/SSR/budgets/security config, and JSON Schema generator.' },
+  { idx: '03', name: 'zerho-resolver', desc: 'Native ESM/CJS, tsconfig.json paths, package.json exports, virtual modules, and Vite-compatible ?raw / ?url queries via oxc_resolver.' },
   { idx: '04', name: 'zerho-graph', desc: 'Incremental module graph, DFS circular dependency detector, embedded redb cache, and HTTP remote team cache.' },
   { idx: '05', name: 'zerho-plugin', desc: 'Native Plugin trait (DefinePlugin), fuel-metered wasmtime v29 host with UTF-8 string hooks, and zerho:plugin@0.1.0 WIT.' },
-  { idx: '06', name: 'zerho-transform', desc: 'Oxc TS/JSX compiler, Minifier/Mangler, Scope Hoisting, Barrel & CJS pre-bundler, Web Workers, CSS @import/url(), and SVG.' },
-  { idx: '07', name: 'zerho-server', desc: 'Zero-Node axum + tokio + notify dev server, WebSocket HMR, /@zerho/bundle, /__inspect Live Treemap, and Brotli PreviewServer.' },
-  { idx: '08', name: 'zerho-bundler', desc: 'Rayon parallel bundler with redb cache, Shared Chunks + modulepreload, MPA, SSR Edge target, WebP, SRI/CSP, and stats.html.' },
-  { idx: '09', name: 'zerho-cli', desc: 'Single native CLI binary: dev, build (--analyze, --watch, --ssr), migrate, check (--strict), preview, bench, init, schema, and wit.' },
+  { idx: '06', name: 'zerho-transform', desc: 'Oxc TS/JSX compiler, Minifier/Mangler, Scope Hoisting, sideEffects: false Barrel & singleton CJS pre-bundler, Web Workers, CSS @import/url(), and SVG.' },
+  { idx: '07', name: 'zerho-server', desc: 'Zero-Node axum + tokio + notify dev server, WebSocket HMR, dev Barrel Optimizer, /@zerho/bundle, /__inspect Live Treemap, Brotli PreviewServer, and CacheServer.' },
+  { idx: '08', name: 'zerho-bundler', desc: 'Rayon parallel bundler with redb cache, base/empty_out_dir, Shared Chunks + modulepreload, MPA, SSR Edge target, WebP, SRI/CSP, and stats.html.' },
+  { idx: '09', name: 'zerho-cli', desc: 'Single native CLI binary: dev, build (--analyze, --watch, --ssr), test, check (--strict), migrate, preview, cache-server, bench, init, schema, and wit.' },
 ];
 ---
 
@@ -208,7 +209,7 @@ const crates = [
     <div class="container">
       <div class="eyebrow">
         <span class="material-symbols-outlined notranslate" translate="no" aria-hidden="true">bolt</span>
-        <span>v1.1.0 · Web Workers &amp; .wasm · SSR Edge Target · WASM Plugin ABI · Zero Node.js</span>
+        <span>v1.1.0 · Chromium-Verified React 19 + Zustand + Lucide · 64.9 KB Brotli · Zero Node.js</span>
       </div>
 
       <h1>
@@ -440,7 +441,7 @@ const crates = [
           <p class="bar-group-sub">Single static binary vs. Node.js runtime + typical Vite/Rollup devDependencies</p>
           <div class="bar-row">
             <div class="bar-label-row">
-              <span class="notranslate" translate="no" style="color:#fff;font-weight:600;">zerho v1.0.0 (Zero-Node)</span>
+              <span class="notranslate" translate="no" style="color:#fff;font-weight:600;">zerho v1.1.0 (Zero-Node)</span>
               <span class="t-accent">16.6 MB</span>
             </div>
             <div class="bar-track"><div class="bar-fill bar-fill-accent" style="width: 7%;"></div></div>
@@ -502,23 +503,23 @@ const crates = [
         <div class="bench-card">
           <div>
             <div class="bench-head">
-              <h3>react-tsx (5 mods)</h3>
-              <span class="bench-badge">Code Split</span>
+              <h3>React 19 + Zustand + Lucide</h3>
+              <span class="bench-badge">Chromium E2E</span>
             </div>
-            <p>React TSX + CJS-to-ESM + dynamic import() splitting + 2 Source Maps v3 + Brotli (1.00 KB).</p>
+            <p>Real npm stack verified in headless Chrome (dev &amp; build, 0 errors): 2,158 &rarr; 28 mods via sideEffects: false barrel bypass.</p>
           </div>
           <div class="bench-metrics">
             <div class="bench-metric">
-              <strong>0.548 ms</strong>
-              <span>Cold TSX</span>
+              <strong>28 mods</strong>
+              <span>77&times; Pruned</span>
             </div>
             <div class="bench-metric">
-              <strong>2.0 µs</strong>
-              <span>redb Hit</span>
+              <strong>69.5 KB</strong>
+              <span>Gzip JS</span>
             </div>
             <div class="bench-metric">
-              <strong>29.18 ms</strong>
-              <span>Warm Min</span>
+              <strong>64.9 KB</strong>
+              <span>Brotli .br</span>
             </div>
           </div>
         </div>
